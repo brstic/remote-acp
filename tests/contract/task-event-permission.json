@@ -1,0 +1,1 @@
+{"sender":"desktop","valid":true,"envelope":{"version":1,"id":"msg_03","connectionId":"conn_123","taskId":"task_456","sequence":4,"kind":"task.event","createdAt":"2026-11-02T19:00:02Z","payload":{"type":"permission_pending","requestId":"perm_1","title":"Write README.md"}}}

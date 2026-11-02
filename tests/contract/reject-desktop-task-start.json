@@ -1,0 +1,1 @@
+{"sender":"desktop","valid":false,"envelope":{"version":1,"id":"msg_05","connectionId":"conn_123","taskId":"task_456","sequence":0,"kind":"task.start","createdAt":"2026-11-02T19:00:00Z","payload":{"externalUserId":"user-42","serviceId":"svc_demo","input":[{"type":"text","text":"hi"}],"mode":"interactive"}}}

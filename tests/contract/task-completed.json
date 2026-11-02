@@ -1,0 +1,1 @@
+{"sender":"desktop","valid":true,"envelope":{"version":1,"id":"msg_04","connectionId":"conn_123","taskId":"task_456","sequence":9,"kind":"task.completed","createdAt":"2026-11-02T19:00:03Z","payload":{"stopReason":"end_turn"}}}

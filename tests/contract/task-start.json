@@ -1,0 +1,1 @@
+{"sender":"relay","valid":true,"envelope":{"version":1,"id":"msg_01","connectionId":"conn_123","taskId":"task_456","sequence":0,"kind":"task.start","createdAt":"2026-11-02T19:00:00Z","payload":{"externalUserId":"user-42","serviceId":"svc_demo","input":[{"type":"text","text":"Review the authorized project."}],"mode":"interactive"}}}

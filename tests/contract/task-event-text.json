@@ -1,0 +1,1 @@
+{"sender":"desktop","valid":true,"envelope":{"version":1,"id":"msg_02","connectionId":"conn_123","taskId":"task_456","sequence":3,"kind":"task.event","createdAt":"2026-11-02T19:00:01Z","payload":{"type":"text_delta","text":"Hello"}}}
