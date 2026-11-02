@@ -1,0 +1,14 @@
+{
+  "listen": "0.0.0.0:8787",
+  "publicUrl": "https://relay.example.com",
+  "database": "/var/lib/remote-acp/relay.sqlite3",
+  "services": [
+    {
+      "id": "svc_yourapp",
+      "displayName": "Your App",
+      "origin": "https://app.example.com",
+      "secretSha256": "<output of: remote-acp-relay new-secret>",
+      "verification": "well_known"
+    }
+  ]
+}

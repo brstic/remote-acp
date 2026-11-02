@@ -1,0 +1,19 @@
+# Public relay: Caddy terminates TLS (automatic Let's Encrypt), relay listens internally.
+# 1. Point a DNS name (RELAY_DOMAIN) at the server.  2. Create relay.json (see relay.example.json).
+# 3. RELAY_DOMAIN=relay.example.com docker compose up -d
+services:
+  relay:
+    build: { context: ../.., dockerfile: deploy/relay/Dockerfile }
+    restart: unless-stopped
+    volumes:
+      - ./relay.json:/etc/remote-acp/relay.json:ro
+      - relay-data:/var/lib/remote-acp
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment: { RELAY_DOMAIN: "${RELAY_DOMAIN}" }
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+volumes: { relay-data: {}, caddy-data: {} }
