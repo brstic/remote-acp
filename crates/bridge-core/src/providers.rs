@@ -78,11 +78,11 @@ pub fn policy_for(provider: &str, mode: AuthMode) -> PolicyDecision {
         ("mock", _) => (Allowed, "Built-in test agent. No AI provider is used."),
         ("codex", AuthMode::ApiKey) => (Allowed, "Uses your OpenAI API key. API usage is billed to your OpenAI account."),
         ("codex", AuthMode::Subscription) => (
-            AllowedWithNotice,
+            Allowed,
             "Uses your ChatGPT plan's Codex usage limits. Website tasks count toward your plan. Make sure your use complies with OpenAI's terms for your plan.",
         ),
         ("claude", _) => (
-            AllowedWithNotice,
+            Allowed,
             "Uses your own Claude Code sign-in through the official Claude Code ACP adapter. Tasks count toward your Claude plan's usage limits. Make sure your use follows Anthropic's terms for your plan.",
         ),
         (p, _) if p.starts_with("custom:") => (
@@ -117,8 +117,8 @@ mod policy_tests {
         let mk = |p: &str, a: &str| CustomAgent { id: "custom:x".into(), name: "x".into(), program: p.into(), args: vec![a.into()], sha256: String::new() };
         assert_eq!(custom_policy(&mk("/usr/local/bin/node", "/x/claude-agent-acp/dist/index.js")).note, policy_for("claude", AuthMode::Subscription).note);
         assert_eq!(custom_policy(&mk("/opt/bin/my-agent", "--acp")).remote, RemotePolicy::AllowedWithNotice);
-        assert_eq!(policy_for("claude", AuthMode::Subscription).remote, RemotePolicy::AllowedWithNotice);
-        assert_eq!(policy_for("codex", AuthMode::Subscription).remote, RemotePolicy::AllowedWithNotice);
+        assert_eq!(policy_for("claude", AuthMode::Subscription).remote, RemotePolicy::Allowed);
+        assert_eq!(policy_for("codex", AuthMode::Subscription).remote, RemotePolicy::Allowed);
     }
 }
 

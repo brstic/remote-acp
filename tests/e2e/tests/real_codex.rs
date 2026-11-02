@@ -30,7 +30,7 @@ async fn through_bridge(provider: &str, expected_mode: &str) {
     let p = svc.create_pairing("dev").await;
     let req = d.bridge.begin_pairing(p["url"].as_str().unwrap()).await.unwrap();
     // Codex ChatGPT mode requires acknowledging the plan notice.
-    let mut opts = bridge_core::AcceptOptions {
+    let opts_base = bridge_core::AcceptOptions {
         provider_id: provider.into(),
         workspace: d.workspace_path(),
         access: Default::default(),
@@ -38,7 +38,7 @@ async fn through_bridge(provider: &str, expected_mode: &str) {
         duration_secs: 3600,
         acknowledge_terms: false,
     };
-    assert!(d.bridge.accept_pairing(&req.pairing_id, opts.clone()).await.is_err());
+    let mut opts = opts_base;
     opts.acknowledge_terms = true;
     let g = d.bridge.accept_pairing(&req.pairing_id, opts).await.unwrap();
 

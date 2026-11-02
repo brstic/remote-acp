@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, ExternalLink, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, ExternalLink, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { api, openExternal, pickFile } from "../lib/api";
 import { useBridge } from "../lib/store";
 import type { ProviderView } from "../lib/types";
@@ -21,7 +21,6 @@ function ProviderDetail({ p }: { p: ProviderView }) {
     setBusy(null);
   };
 
-  const policyTone = p.policy.remote === "blocked" ? "callout-red" : p.policy.remote === "allowed_with_notice" ? "callout-amber" : "callout-blue";
 
   return (
     <div className="card" style={{ overflow: "hidden" }}>
@@ -47,15 +46,14 @@ function ProviderDetail({ p }: { p: ProviderView }) {
           <dd>{p.authMode === "subscription" ? `Signed in (${p.authLabel ?? "subscription"})` : p.authMode === "api_key" ? "Signed in with an API key (via the provider's CLI)" : p.id === "mock" ? "Not needed" : "Not signed in"}</dd>
         </dl>
       </div>
-      <div className="setting-row" style={{ display: "block" }}>
-        <div className={`callout ${policyTone}`}>
-          {p.policy.remote === "blocked" ? <AlertTriangle size={15} color="var(--red)" /> : p.policy.remote === "allowed" ? <CheckCircle2 size={15} color="var(--green)" /> : <AlertTriangle size={15} color="var(--amber)" />}
-          <div>
-            <b>Website use: </b>
-            {p.policy.remote === "blocked" ? "Not available" : p.policy.remote === "allowed" ? "Available" : "Available with notice"}. {p.policy.note}
+      {p.policy.remote === "blocked" && (
+        <div className="setting-row" style={{ display: "block" }}>
+          <div className="callout callout-red">
+            <AlertTriangle size={15} color="var(--red)" />
+            <div><b>Not available for websites. </b>{p.policy.note}</div>
           </div>
         </div>
-      </div>
+      )}
       {p.id !== "mock" && (
         <div className="setting-row row-wrap" style={{ gap: 8 }}>
           {p.actions.includes("install_adapter") && (
