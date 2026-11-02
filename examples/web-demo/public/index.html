@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="data:," />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Acme Notes (Demo)</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <div class="demo-banner" role="note">
+      <strong>DEMO</strong> — Acme Notes is a fake SaaS showing a Remote ACP Bridge integration. Sign-in is not real; anyone can pick any
+      name. Don't enter anything sensitive.
+    </div>
+
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">✎</span>
+        <span class="brand-name">Acme Notes</span>
+        <span class="badge badge-demo">DEMO</span>
+      </div>
+      <div class="userbox" id="userbox" hidden>
+        <span class="avatar" id="avatar" aria-hidden="true"></span>
+        <span id="username"></span>
+        <button class="btn btn-ghost btn-sm" id="logout" type="button">Sign out</button>
+      </div>
+    </header>
+
+    <main>
+      <!-- Sign in -->
+      <section class="card signin" id="signin" hidden>
+        <h1>Sign in <span class="muted">(demo only)</span></h1>
+        <p class="muted">No password, no real account. The name only scopes your desktop connection and tasks on this demo server.</p>
+        <div class="quick-users">
+          <button class="btn btn-secondary" data-user="alice" type="button">alice</button>
+          <button class="btn btn-secondary" data-user="bob" type="button">bob</button>
+          <button class="btn btn-secondary" data-user="carol" type="button">carol</button>
+        </div>
+        <form id="login-form" class="row">
+          <label class="sr-only" for="login-name">Username</label>
+          <input id="login-name" name="username" placeholder="or type a name, e.g. dana" autocomplete="off" maxlength="24" />
+          <button class="btn btn-primary" type="submit">Continue</button>
+        </form>
+        <p class="error" id="login-error" role="alert" hidden></p>
+      </section>
+
+      <!-- App -->
+      <div class="layout" id="app" hidden>
+        <section class="card connection" aria-labelledby="conn-title">
+          <h2 id="conn-title">Desktop agent</h2>
+          <div id="conn-body" aria-live="polite"></div>
+        </section>
+
+        <section class="card assistant" aria-labelledby="asst-title">
+          <div class="assistant-head">
+            <h2 id="asst-title">Assistant</h2>
+            <span class="muted small">Runs on <em>your</em> computer through Remote ACP Bridge</span>
+          </div>
+          <div class="transcript" id="transcript">
+            <div class="empty" id="empty">
+              <p>Ask your local AI agent something. It runs on your desktop, in the workspace you chose there.</p>
+              <p class="muted small">With the built-in Test agent, try:</p>
+              <div class="suggestions">
+                <button class="chip-btn" type="button" data-prompt="hello from Acme Notes">hello from Acme Notes</button>
+                <button class="chip-btn" type="button" data-prompt="permission">permission</button>
+                <button class="chip-btn" type="button" data-prompt="slow">slow</button>
+              </div>
+            </div>
+          </div>
+          <form class="composer" id="composer">
+            <label class="sr-only" for="prompt">Prompt</label>
+            <textarea id="prompt" rows="2" placeholder="Connect your desktop agent to start…" disabled></textarea>
+            <button class="btn btn-primary" id="send" type="submit" disabled>Send</button>
+          </form>
+          <p class="error" id="composer-error" role="alert" hidden></p>
+        </section>
+      </div>
+    </main>
+
+    <footer class="foot muted small">
+      Permission prompts are answered only in the desktop app. This website can observe them, never answer them.
+    </footer>
+  </body>
+</html>

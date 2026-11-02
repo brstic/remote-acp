@@ -1,0 +1,5 @@
+packages:
+  - "apps/desktop"
+  - "packages/*"
+  - "examples/*"
+  - "tests/node-e2e"

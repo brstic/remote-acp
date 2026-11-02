@@ -1,0 +1,27 @@
+{
+  "name": "@remote-acp/browser-helper",
+  "version": "0.1.0",
+  "description": "Tiny browser-only helpers for showing a Remote ACP Bridge pairing link and code. Contains no secrets.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "happy-dom": "15.11.7",
+    "typescript": "5.6.3",
+    "vitest": "2.1.8"
+  }
+}

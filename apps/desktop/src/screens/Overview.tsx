@@ -52,7 +52,7 @@ export function Overview() {
                 <ProviderLogo provider={p} />
                 <div className="grow">
                   <div className="name">{p.name}</div>
-                  <div className="small faint ellipsis">{p.authLabel ? `Signed in · ${p.authLabel}` : p.statusMessage}</div>
+                  <div className="small faint ellipsis">{p.state === "ready" && p.authLabel ? `Signed in · ${p.authLabel}` : p.statusMessage}</div>
                 </div>
                 {providerBadge(p)}
               </div>

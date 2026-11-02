@@ -1,0 +1,16 @@
+# Decisions
+
+Format: date — decision — why.
+
+- 2026-11-02 — **Hand-written ACP v1 client** (`crates/agent-host`) instead of the `agent-client-protocol` crate (v5). The bridge needs a narrow subset (initialize, authenticate, session/new, set_mode, prompt, cancel, update, request_permission, fs read/write); owning the framing lets us enforce per-line size limits, backpressure, unsolicited-reply rejection, process-group termination and stderr isolation precisely. Verified against the real `@agentclientprotocol/codex-acp` 2.5.0. Revisit when remote/v2 transports stabilize.
+- 2026-11-02 — **Custom bridge envelope, not "ACP over the network".** Website-facing API is an allowlisted message family (`crates/bridge-protocol`). The website can never send raw ACP, answer permission prompts, or reach fs/terminal methods.
+- 2026-11-02 — **Service side uses REST + SSE** (not a service WebSocket). Simpler SDK, works through proxies, `Last-Event-ID` resume from a bounded in-memory buffer. `WSS /v1/service` from the plan is deferred.
+- 2026-11-02 — **At-most-once task dispatch.** Relay never re-sends `task.start`; desktop dedupes by task id; idempotency keys return the original task. Reconnects resend only the one in-flight frame, relay dedupes by per-task desktop sequence.
+- 2026-11-02 — **One agent session per connection**, reused across tasks (multi-turn) and closed after an idle timeout; one active task per connection. Local test tasks use a throwaway session.
+- 2026-11-02 — **Remote sessions must run in a restricted agent mode.** Access level maps to adapter mode ids (`read-only`/`workspace-write` for Codex). If an adapter advertises modes but none can be selected, the remote task is refused. Full-access modes are not representable.
+- 2026-11-02 — **Claude: API-key mode only for website use.** Subscription path is `Blocked` in the policy registry (Anthropic terms). Adapter runs with an isolated `CLAUDE_CONFIG_DIR` so a consumer login is not picked up. Codex ChatGPT sign-in is `AllowedWithNotice`: the user must acknowledge plan/terms at consent time.
+- 2026-11-02 — **Pinned, integrity-checked adapters.** Installed with npm into the app data dir at an exact version; lockfile `integrity` must equal the pinned sha512; the entry file's sha256 is recorded and re-verified before every launch.
+- 2026-11-02 — **Plain CSS design system** instead of Tailwind; fewer moving parts, tokens for light/dark. React state via a small context store (no Zustand/TanStack needed at this size).
+- 2026-11-02 — **Built-in "Test agent"**: the desktop binary itself acts as a mock ACP agent with `--acp-mock-agent`, so the bridge can be demonstrated without any AI provider and E2E tests use the same agent.
+- 2026-11-02 — **No E2EE yet.** TLS to the relay; relay keeps no prompts/results on disk. E2EE requires a threat-modelled, audited design (see `docs/threat-model.md`); not claimed.
+- 2026-11-02 — Pairing tickets carry the relay URL for display only; the desktop refuses links for a relay other than its configured one.

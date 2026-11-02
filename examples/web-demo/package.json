@@ -1,0 +1,29 @@
+{
+  "name": "@remote-acp/web-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DEMO: 'Acme Notes', a minimal SaaS integrating Remote ACP Bridge via @remote-acp/web-sdk.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/app.js",
+  "exports": {
+    ".": "./dist/app.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/main.js",
+    "dev": "pnpm --filter @remote-acp/web-demo... build && REMOTE_ACP_SERVICE_SECRET=${REMOTE_ACP_SERVICE_SECRET:-dev-only-acme-notes-secret-0123456789abcdef} node dist/main.js",
+    "relay": "cargo run --manifest-path ../../Cargo.toml -p remote-acp-relay -- --config relay.dev.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@remote-acp/browser-helper": "workspace:*",
+    "@remote-acp/web-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "typescript": "5.6.3",
+    "vitest": "2.1.8"
+  }
+}

@@ -31,7 +31,11 @@ fn friendly_http_error(status: u16, body: &Value) -> BridgeError {
 pub(crate) async fn desktop_token(b: &Bridge) -> BResult<String> {
     let relay = b.relay_url();
     let key = token_key(&relay);
-    if let Some(t) = b.inner.cfg.secrets.get(&key) {
+    // OS keychains may block (e.g. an authorization prompt); keep it off the async runtime.
+    let secrets = b.inner.cfg.secrets.clone();
+    let k2 = key.clone();
+    let existing = tokio::task::spawn_blocking(move || secrets.get(&k2)).await.ok().flatten();
+    if let Some(t) = existing {
         if let Some((id, _)) = t.split_once('.') {
             *b.inner.desktop_id.lock().unwrap() = Some(id.to_string());
         }
@@ -53,7 +57,12 @@ pub(crate) async fn desktop_token(b: &Bridge) -> BResult<String> {
         return Err(friendly_http_error(status, &v));
     }
     let token = v["desktopToken"].as_str().ok_or_else(|| BridgeError::Internal("bad registration".into()))?.to_string();
-    b.inner.cfg.secrets.set(&key, &token).map_err(|e| BridgeError::Internal(e.to_string()))?;
+    let secrets = b.inner.cfg.secrets.clone();
+    let (k2, t2) = (key.clone(), token.clone());
+    tokio::task::spawn_blocking(move || secrets.set(&k2, &t2))
+        .await
+        .map_err(|e| BridgeError::Internal(e.to_string()))?
+        .map_err(|e| BridgeError::Internal(e.to_string()))?;
     *b.inner.desktop_id.lock().unwrap() = v["desktopId"].as_str().map(str::to_string);
     b.inner.store.lock().unwrap().audit(None, None, "desktop_registered", serde_json::json!({"relay": relay}));
     Ok(token)

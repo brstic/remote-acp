@@ -88,8 +88,10 @@ impl SecretStore for MemoryStore {
 }
 
 /// Pick the OS store when it works, else fall back to memory with a warning.
-pub fn default_store() -> Box<dyn SecretStore> {
-    let k = KeyringStore::new("com.remoteacp.bridge");
+/// `service` namespaces items; use a different one per signing identity
+/// (e.g. dev vs. release builds) so macOS does not prompt across builds.
+pub fn default_store(service: &str) -> Box<dyn SecretStore> {
+    let k = KeyringStore::new(service);
     if k.probe() {
         Box::new(k)
     } else {

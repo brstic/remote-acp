@@ -1,0 +1,14 @@
+{
+  "listen": "127.0.0.1:8787",
+  "publicUrl": "http://127.0.0.1:8787",
+  "database": "relay.dev.sqlite3",
+  "services": [
+    {
+      "id": "svc_demo",
+      "displayName": "Acme Notes (demo)",
+      "origin": "http://localhost:3000",
+      "secretSha256": "a46dd2a85259263aab5d4c3786af730252dcefede253ec54e1da238bf130980c",
+      "verification": "operator"
+    }
+  ]
+}
