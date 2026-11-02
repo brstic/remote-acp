@@ -19,7 +19,7 @@ _Last updated: 2026-11-02_
 | TS packages | 66 passed (protocol-types 15, browser-helper 6, web-sdk 32, web-demo 5, node E2E 8 with real relay binary + headless desktop) |
 | Desktop UI (vitest) | 7 passed |
 | E2E stability | Rust E2E 3×, Node E2E 3× consecutive green |
-| Manual | release `.app` (22 MB) and `.dmg` (7.3 MB) built; app starts, registers, connects to relay; `remoteacp://` link from macOS opens the consent sheet with relay-verified identity; demo website driven in real Brave (headless): sign-in → pairing → streaming → permission → cancel, light and dark |
+| Manual | release `.app` (22 MB) and `.dmg` (7.3 MB) built; app starts, registers, connects to relay; `remoteacp://` link from macOS opens the consent sheet with relay-verified identity; demo website driven in real Brave (headless): sign-in → pairing → streaming → permission → cancel, light and dark; **GUI E2E on the release `.app` with real mouse/keyboard events** (`tests/gui-e2e`): website pairing link → macOS → consent sheet → typed folder → *Allow connection* → website sends task → *Allow task* in the app's tray → streamed reply on the website → *Allow once* on a permission prompt → file written in the chosen folder → *Disconnect* → relay reports `revoked` |
 
 ## Acceptance tests (PLAN §16)
 | # | Status |
@@ -42,7 +42,8 @@ _Last updated: 2026-11-02_
 | 18 Installable artifacts + docs | ✅ unsigned macOS artifacts |
 
 ## Not done yet / known limitations
-- Clicking through the desktop UI was not automated on a real window (macOS Accessibility permission unavailable to the test runner); covered by component tests + engine E2E. A manual click-through is the remaining check.
+- GUI E2E is a scripted manual-run procedure (macOS only), not part of CI.
+- Two installed copies of the app (e.g. debug + release bundles) both register `remoteacp://`; macOS may hand the link to the non-running copy, whose single-instance hand-off drops the URL. Keep one installed copy (see troubleshooting).
 - No code signing / notarization / auto-update; Windows job-object process trees; Linux packaging not tested.
 - No hosted relay: users must run one (`docs/deployment.md`). The north-star "no shell command" onboarding needs a hosted relay.
 - No E2EE (TLS + no persistence on relay only).
