@@ -446,3 +446,78 @@ async fn output_firewall_blocks_agent_own_file_reads_and_secrets() {
     let audit = d.bridge.diagnostics().await.audit;
     assert!(audit.iter().filter(|a| a.event_type == "output_blocked").count() >= 2);
 }
+
+async fn start_persistent(dir: std::path::PathBuf, url: String) -> bridge_core::Bridge {
+    bridge_core::Bridge::start(bridge_core::BridgeConfig {
+        data_dir: dir.clone(),
+        default_relay_url: url,
+        app_version: "test".into(),
+        mock_command: Some((std::path::PathBuf::from(env!("CARGO_BIN_EXE_mock-acp-agent")), vec![])),
+        secrets: std::sync::Arc::new(bridge_core::secrets::FileStore::new(dir.join("secrets.json"))),
+        in_memory_db: false,
+    })
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+async fn settings_validation_and_persistence() {
+    let relay = start_relay().await;
+    let data = tempfile::tempdir().unwrap();
+    let b = start_persistent(data.path().to_path_buf(), relay.url.clone()).await;
+    let mut s = b.settings();
+    // Plain http to a non-local host is refused.
+    s.relay_url = "http://relay.example.com".into();
+    assert!(b.update_settings(s.clone()).is_err());
+    s.relay_url = relay.url.clone();
+    s.session_idle_minutes = 99999; // clamped
+    s.theme = "dark".into();
+    s.default_provider = Some("mock".into());
+    let saved = b.update_settings(s).unwrap();
+    assert_eq!(saved.session_idle_minutes, 240);
+    b.set_paused(true).await.unwrap();
+    for _ in 0..100 {
+        if b.snapshot().bridge.desktop_id.is_some() { break; }
+        tokio::time::sleep(Duration::from_millis(30)).await;
+    }
+    let desktop_id = b.snapshot().bridge.desktop_id.unwrap();
+    b.shutdown().await;
+    drop(b);
+    // Restart from the same data dir: settings, pause and relay identity survive.
+    let b2 = start_persistent(data.path().to_path_buf(), relay.url.clone()).await;
+    let snap = b2.snapshot();
+    assert_eq!(snap.settings.theme, "dark");
+    assert_eq!(snap.settings.default_provider.as_deref(), Some("mock"));
+    assert!(snap.bridge.paused);
+    for _ in 0..100 {
+        if matches!(b2.snapshot().bridge.relay, bridge_core::RelayStatus::Connected { .. }) { break; }
+        tokio::time::sleep(Duration::from_millis(30)).await;
+    }
+    assert_eq!(b2.snapshot().bridge.desktop_id.unwrap(), desktop_id, "re-registered instead of reusing its token");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(data.path().join("secrets.json")).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+    }
+}
+
+#[tokio::test]
+async fn access_level_change_restarts_session_in_new_mode_and_forget() {
+    let (_r, d, svc) = setup().await;
+    let conn = d.pair(&svc, "u", false).await;
+    let (_, t) = svc.start_task(&conn, "u", "hi").await;
+    svc.events(t["taskId"].as_str().unwrap(), None).await;
+    assert_eq!(d.bridge.diagnostics().await.sessions[0].current_mode.as_deref(), Some("ask"));
+    d.bridge.update_grant(&conn, false, connection_policy::AccessLevel::WorkspaceWrite).await.unwrap();
+    assert!(d.bridge.diagnostics().await.sessions.is_empty(), "session must restart after access change");
+    let (_, t) = svc.start_task(&conn, "u", "hi again").await;
+    svc.events(t["taskId"].as_str().unwrap(), None).await;
+    assert_eq!(d.bridge.diagnostics().await.sessions[0].current_mode.as_deref(), Some("edit"));
+    // A live connection can't be forgotten; a revoked one can.
+    assert!(d.bridge.forget_grant(&conn).is_err());
+    d.bridge.revoke_grant(&conn).await.unwrap();
+    d.bridge.forget_grant(&conn).unwrap();
+    assert!(d.bridge.snapshot().grants.iter().all(|g| g.connection_id != conn));
+    assert!(d.bridge.diagnostics().await.audit.iter().any(|a| a.event_type == "connection_updated"));
+}
