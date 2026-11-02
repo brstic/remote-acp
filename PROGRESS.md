@@ -44,8 +44,9 @@ _Last updated: 2026-11-02_
 ## Not done yet / known limitations
 - GUI E2E is a scripted manual-run procedure (macOS only), not part of CI.
 - Two installed copies of the app (e.g. debug + release bundles) both register `remoteacp://`; macOS may hand the link to the non-running copy, whose single-instance hand-off drops the URL. Keep one installed copy (see troubleshooting).
-- No code signing / notarization / auto-update; Windows job-object process trees; Linux packaging not tested.
-- No hosted relay: users must run one (`docs/deployment.md`). The north-star "no shell command" onboarding needs a hosted relay.
+- Signing/notarization: wired in `release.yml` (activates with `APPLE_*` secrets); not performed — no Developer ID on this machine. No auto-update.
+- Windows: all Rust crates except the Tauri shell `cargo check` clean for `x86_64-pc-windows-gnu`; app not run on a real Windows machine. Linux: not run (no Linux host/containers here; CI matrix builds and tests it).
+- No hosted relay is running yet: a deployable kit exists (`deploy/relay`: Docker + Caddy automatic TLS); it needs a server and a domain.
 - No E2EE (TLS + no persistence on relay only).
 - Claude adapter not tested with a real API key in this session.
 - Next.js demo from the plan replaced by a framework-free Node demo.
