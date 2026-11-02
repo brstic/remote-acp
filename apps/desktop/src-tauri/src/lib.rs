@@ -356,16 +356,12 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            // Closing the window only hides it: the bridge keeps running in
+            // the background so websites can still reach the agent. Quit via
+            // the menu bar icon or Cmd+Q.
             if let WindowEvent::CloseRequested { api, .. } = event {
-                let app = window.app_handle();
-                let keep = app.state::<AppState>().bridge.settings().keep_in_tray;
-                if keep {
-                    api.prevent_close();
-                    let _ = window.hide();
-                } else {
-                    let b = app.state::<AppState>().bridge.clone();
-                    tauri::async_runtime::block_on(b.shutdown());
-                }
+                api.prevent_close();
+                let _ = window.hide();
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -393,6 +389,19 @@ pub fn run() {
             get_diagnostics,
             clear_diagnostics,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Remote ACP Bridge");
+        .build(tauri::generate_context!())
+        .expect("error while building Remote ACP Bridge")
+        .run(|app, event| match event {
+            // Dock icon clicked while the window is hidden.
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Reopen { has_visible_windows, .. } if !has_visible_windows => show_main(app),
+            // Cmd+Q / Quit: stop agent processes cleanly.
+            tauri::RunEvent::ExitRequested { .. } => {
+                if let Some(state) = app.try_state::<AppState>() {
+                    let b = state.bridge.clone();
+                    tauri::async_runtime::block_on(b.shutdown());
+                }
+            }
+            _ => {}
+        });
 }

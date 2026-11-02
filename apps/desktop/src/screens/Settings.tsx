@@ -25,10 +25,6 @@ export function Settings() {
             <Switch label="Launch at login" checked={s.launchAtLogin} onChange={(v) => save({ launchAtLogin: v })} />
           </div>
           <div className="setting-row">
-            <div className="text"><div className="title">Keep running when the window is closed</div><div className="desc">Websites can only reach your agent while the app runs. Use the menu bar icon to quit.</div></div>
-            <Switch label="Keep running in menu bar" checked={s.keepInTray} onChange={(v) => save({ keepInTray: v })} />
-          </div>
-          <div className="setting-row">
             <div className="text"><div className="title">Notifications</div><div className="desc">Notify me about connection requests, task requests and permission prompts.</div></div>
             <Switch label="Notifications" checked={s.notifications} onChange={(v) => save({ notifications: v })} />
           </div>
@@ -220,7 +216,7 @@ export function Help() {
         <ul className="muted" style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
           <li>They can send prompts to the agent you chose and see its replies and progress.</li>
           <li>They can't run commands, read files outside the project folder, see your provider sign-in, or approve permission prompts.</li>
-          <li>The app must be running for websites to reach your agent.</li>
+          <li>Closing the window keeps the app running in the background, so websites can still reach your agent. Reopen it from the Dock; quit from the menu bar icon or with ⌘Q.</li>
         </ul>
       </div>
       <div className="card card-pad stack">
