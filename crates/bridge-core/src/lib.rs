@@ -5,6 +5,7 @@
 //! before anything reaches a local ACP agent.
 
 pub mod engine;
+pub mod guard;
 pub mod providers;
 pub mod relay_client;
 pub mod secrets;

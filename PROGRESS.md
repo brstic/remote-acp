@@ -14,7 +14,8 @@ _Last updated: 2026-11-02_
 ## Test results (2026-11-02, macOS arm64)
 | Suite | Result |
 |---|---|
-| `cargo test --workspace` | 46 passed (protocol 9, framing 2, ACP host 11, policy 8, E2E 16), 1 ignored (real Codex) |
+| `cargo test --workspace` | 52 passed (protocol 9, framing 2, ACP host 11, policy 9, bridge-core 4, E2E 17), 1 ignored (real Codex) |
+| real agents (`real_agents.rs`, `--ignored`) | 6 passed with codex-acp 2.5.0 (ChatGPT login) and claude-agent-acp 0.100.0 (local Claude Code login, compatibility test only): initialize, restricted mode, reply, in-workspace read, real permission prompt denied → no file, allowed → file written, cancel (< 15 ms), website permission through the bridge, output firewall blocks outside-workspace reads for both agents |
 | real Codex (`--ignored`) | passed: verified adapter install, ChatGPT sign-in detected, session in `read-only` mode, streamed `BRIDGE_OK`, no account data leaked |
 | TS packages | 66 passed (protocol-types 15, browser-helper 6, web-sdk 32, web-demo 5, node E2E 8 with real relay binary + headless desktop) |
 | Desktop UI (vitest) | 7 passed |
@@ -48,5 +49,5 @@ _Last updated: 2026-11-02_
 - Windows: all Rust crates except the Tauri shell `cargo check` clean for `x86_64-pc-windows-gnu`; app not run on a real Windows machine. Linux: not run (no Linux host/containers here; CI matrix builds and tests it).
 - No hosted relay is running yet: a deployable kit exists (`deploy/relay`: Docker + Caddy automatic TLS); it needs a server and a domain.
 - No E2EE (TLS + no persistence on relay only).
-- Claude adapter not tested with a real API key in this session.
+- Claude adapter verified with a local Claude Code login (compatibility only); the product's API-key launch path is not exercised with a real key.
 - Next.js demo from the plan replaced by a framework-free Node demo.

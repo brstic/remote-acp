@@ -52,6 +52,9 @@ pub(crate) struct LiveTask {
     pub cancel_tx: watch::Sender<bool>,
     pub seq: u64,
     pub allowed_kinds: HashSet<String>,
+    /// Set when the output firewall stopped the task; nothing more is sent.
+    pub blocked: Option<String>,
+    pub scan_tail: String,
 }
 
 struct PendingPermission {
@@ -895,6 +898,8 @@ impl Bridge {
                 cancel_tx,
                 seq: 0,
                 allowed_kinds: HashSet::new(),
+                blocked: None,
+                scan_tail: String::new(),
             },
         );
         let mut order = self.inner.task_order.lock().unwrap();
@@ -1311,10 +1316,84 @@ impl Bridge {
         } else if let Some(s) = self.inner.sessions.lock().await.get_mut(&key) {
             s.last_used = Instant::now();
         }
+        if let Some(reason) = self.with_task(&task_id, |t| t.blocked.clone()).flatten() {
+            self.close_session(&key).await;
+            // The detailed reason (with local paths) stays on the desktop.
+            let public = if reason.contains("credential") {
+                "Stopped by the desktop's safety checks: the reply contained what looks like a credential"
+            } else {
+                "Stopped by the desktop's safety checks: the agent tried to access a file outside the project folder"
+            };
+            self.finish_failed(&task_id, "policy_blocked", public).await;
+            return;
+        }
         self.finish(&task_id, result).await;
     }
 
+    /// Stop a website task because the output firewall triggered.
+    fn block_task(&self, task_id: &str, reason: String) {
+        let first = self
+            .with_task(task_id, |t| {
+                let first = t.blocked.is_none();
+                if first {
+                    t.blocked = Some(reason.clone());
+                }
+                first
+            })
+            .unwrap_or(false);
+        if !first {
+            return;
+        }
+        self.push_item(task_id, TranscriptItem::Error { text: format!("Blocked: {reason}. The task was stopped and nothing more was sent to the website.") });
+        let conn = self.with_task(task_id, |t| t.view.connection_id.clone()).flatten();
+        self.inner.store.lock().unwrap().audit(conn.as_deref(), Some(task_id), "output_blocked", json!({"reason": redact(&reason, None)}));
+        self.record_error(format!("output firewall: {reason}"));
+        let b = self.clone();
+        let id = task_id.to_string();
+        tokio::spawn(async move { b.cancel_task(&id, "blocked by the bridge's safety checks").await });
+        self.changed();
+    }
+
     async fn forward_update(&self, task_id: &str, update: SessionUpdate, workspace: &std::path::Path) -> bool {
+        let (remote, blocked) = self
+            .with_task(task_id, |t| (t.view.connection_id.is_some(), t.blocked.is_some()))
+            .unwrap_or((false, false));
+        if blocked {
+            return true;
+        }
+        if remote {
+            match &update {
+                SessionUpdate::ToolCall(f) | SessionUpdate::ToolCallUpdate(f) => {
+                    let mut texts: Vec<String> = f.title.iter().cloned().collect();
+                    if let Some(v) = &f.raw_input {
+                        crate::guard::json_strings(v, &mut texts);
+                    }
+                    texts.extend(f.locations.iter().map(|l| l.path.clone()));
+                    let hits = crate::guard::paths_outside(&texts, workspace);
+                    if let Some(p) = hits.first() {
+                        self.block_task(task_id, format!("the agent tried to access {} outside the project folder", redact(p, None)));
+                        return true;
+                    }
+                }
+                SessionUpdate::AgentMessageChunk { content } | SessionUpdate::AgentThoughtChunk { content } => {
+                    if let Some(text) = content.text() {
+                        let window = self
+                            .with_task(task_id, |t| {
+                                let w = format!("{}{}", t.scan_tail, text);
+                                let keep = w.char_indices().rev().nth(200).map(|(i, _)| i).unwrap_or(0);
+                                t.scan_tail = w[keep..].to_string();
+                                w
+                            })
+                            .unwrap_or_default();
+                        if crate::guard::looks_like_secret(&window) {
+                            self.block_task(task_id, "the agent's reply contained what looks like a credential".into());
+                            return true;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
         let ev = match update {
             SessionUpdate::AgentMessageChunk { content } => {
                 let Some(text) = content.text() else { return true };
@@ -1398,6 +1477,19 @@ impl Bridge {
                 });
                 self.changed();
                 TaskEvent::Plan { entries }
+            }
+            SessionUpdate::CurrentModeUpdate { current_mode_id } => {
+                let remote = self.with_task(task_id, |t| t.view.connection_id.is_some()).unwrap_or(false);
+                if remote && AccessLevel::is_forbidden_mode(&current_mode_id) {
+                    self.push_item(task_id, TranscriptItem::Error {
+                        text: format!("The agent switched to an unrestricted mode ({current_mode_id}); the task was stopped"),
+                    });
+                    self.record_error(format!("agent switched to forbidden mode {current_mode_id}"));
+                    let b = self.clone();
+                    let id = task_id.to_string();
+                    tokio::spawn(async move { b.cancel_task(&id, "agent left the restricted mode").await });
+                }
+                return true;
             }
             _ => return true,
         };
@@ -1497,7 +1589,11 @@ impl Bridge {
             .unwrap_or_default();
         let mut current_mode = new.modes.as_ref().map(|m| m.current_mode_id.clone());
         let mut sandbox_enforced = false;
-        if let Some(target) = access.mode_candidates().iter().find(|c| modes.iter().any(|m| m == *c)) {
+        if let Some(target) = access
+            .mode_candidates()
+            .iter()
+            .find(|c| modes.iter().any(|m| m == *c) && !AccessLevel::is_forbidden_mode(c))
+        {
             if current_mode.as_deref() == Some(*target) {
                 sandbox_enforced = true;
             } else if host.set_mode(&new.session_id, target).await.is_ok() {
@@ -1612,6 +1708,29 @@ impl Bridge {
         if auto_allow {
             if let Some(o) = req.options.iter().find(|o| o.kind == "allow_once") {
                 return PermissionDecision::Selected(o.option_id.clone());
+            }
+        }
+        let remote = self.with_task(&task_id, |t| t.view.connection_id.is_some()).unwrap_or(false);
+        if remote {
+            let mut texts: Vec<String> = req.tool_call.title.iter().cloned().collect();
+            crate::guard::json_strings(&req.raw_tool_call, &mut texts);
+            if let Some(p) = crate::guard::paths_outside(&texts, workspace).first() {
+                let reason = format!("Denied automatically: access to {} outside the project folder", redact(p, None));
+                self.push_item(&task_id, TranscriptItem::Notice { text: reason.clone() });
+                let conn = self.with_task(&task_id, |t| t.view.connection_id.clone()).flatten();
+                self.inner.store.lock().unwrap().audit(conn.as_deref(), Some(&task_id), "permission_auto_denied", json!({"kind": kind}));
+                self.send_remote(&task_id, Body::TaskEvent(TaskEvent::PermissionResolved {
+                    request_id: bridge_protocol::ids::new_id("perm"),
+                    outcome: PermissionOutcome::Denied,
+                }))
+                .await;
+                self.changed();
+                return req
+                    .options
+                    .iter()
+                    .find(|o| o.kind == "reject_once" || o.kind == "reject_always")
+                    .map(|o| PermissionDecision::Selected(o.option_id.clone()))
+                    .unwrap_or(PermissionDecision::Cancelled);
             }
         }
         let request_id = bridge_protocol::ids::new_id("perm");

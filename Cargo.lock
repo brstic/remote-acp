@@ -1146,6 +1146,7 @@ version = "0.1.0"
 dependencies = [
  "agent-host",
  "anyhow",
+ "async-trait",
  "axum",
  "bridge-core",
  "bridge-protocol",

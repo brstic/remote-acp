@@ -222,8 +222,15 @@ impl AccessLevel {
     pub fn mode_candidates(self) -> &'static [&'static str] {
         match self {
             AccessLevel::ReadOnly => &["read-only", "ask", "default", "plan"],
-            AccessLevel::WorkspaceWrite => &["workspace-write", "auto", "acceptEdits", "accept-edits"],
+            AccessLevel::WorkspaceWrite => &["workspace-write", "acceptEdits", "accept-edits", "edit"],
         }
+    }
+
+    /// Mode ids that must never be selected for a website-initiated session,
+    /// whatever an adapter calls them.
+    pub fn is_forbidden_mode(id: &str) -> bool {
+        let id = id.to_ascii_lowercase();
+        ["bypass", "full-access", "full_access", "yolo", "dangerously"].iter().any(|w| id.contains(w)) || id == "auto" || id == "agent"
     }
 }
 
@@ -417,6 +424,18 @@ mod tests {
             input: vec![InputBlock::Text { text: "x".into() }],
             mode: TaskMode::Interactive,
             service_id: svc.into(),
+        }
+    }
+
+    #[test]
+    fn mode_candidates_are_never_forbidden() {
+        for a in [AccessLevel::ReadOnly, AccessLevel::WorkspaceWrite] {
+            for m in a.mode_candidates() {
+                assert!(!AccessLevel::is_forbidden_mode(m), "{m}");
+            }
+        }
+        for m in ["bypassPermissions", "agent-full-access", "auto", "agent"] {
+            assert!(AccessLevel::is_forbidden_mode(m), "{m}");
         }
     }
 

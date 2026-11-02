@@ -30,5 +30,12 @@ case "type":
     usleep(8_000)
   }
   print("typed")
+case "scroll": // scroll <owner> <relX> <relY> <lines(negative=down)>
+  guard let (_, r) = bounds(a[2]) else { exit(1) }
+  let p = CGPoint(x: r.minX + CGFloat(Double(a[3])!), y: r.minY + CGFloat(Double(a[4])!))
+  CGEvent(mouseEventSource: src, mouseType: .mouseMoved, mouseCursorPosition: p, mouseButton: .left)?.post(tap: .cghidEventTap)
+  usleep(80_000)
+  CGEvent(scrollWheelEvent2Source: src, units: .line, wheelCount: 1, wheel1: Int32(a[5])!, wheel2: 0, wheel3: 0)?.post(tap: .cghidEventTap)
+  print("scrolled")
 default: print("usage")
 }

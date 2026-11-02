@@ -98,6 +98,36 @@ pub fn policy_for(provider: &str, mode: AuthMode) -> PolicyDecision {
     }
 }
 
+/// Custom agents that wrap a known provider inherit that provider's rules, so
+/// the Claude subscription restriction can't be bypassed by re-adding the
+/// adapter as a "custom" agent.
+pub fn custom_policy(c: &CustomAgent) -> PolicyDecision {
+    let sig = format!("{} {}", c.program.display(), c.args.join(" ")).to_lowercase();
+    if sig.contains("claude") || sig.contains("anthropic") {
+        return PolicyDecision {
+            remote: RemotePolicy::Blocked,
+            note: "This looks like a Claude agent using your local Claude sign-in. Use the built-in Claude Code provider with an API key for website connections.".into(),
+        };
+    }
+    if sig.contains("codex") {
+        return policy_for("codex", AuthMode::Subscription);
+    }
+    policy_for(&c.id, AuthMode::None)
+}
+
+#[cfg(test)]
+mod policy_tests {
+    use super::*;
+    #[test]
+    fn custom_claude_is_blocked_for_websites() {
+        let mk = |p: &str, a: &str| CustomAgent { id: "custom:x".into(), name: "x".into(), program: p.into(), args: vec![a.into()], sha256: String::new() };
+        assert_eq!(custom_policy(&mk("/usr/local/bin/node", "/x/claude-agent-acp/dist/index.js")).remote, RemotePolicy::Blocked);
+        assert_eq!(custom_policy(&mk("/opt/bin/my-agent", "--acp")).remote, RemotePolicy::AllowedWithNotice);
+        assert_eq!(policy_for("claude", AuthMode::Subscription).remote, RemotePolicy::Blocked);
+        assert_eq!(policy_for("claude", AuthMode::ApiKey).remote, RemotePolicy::Allowed);
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CustomAgent {
@@ -481,7 +511,7 @@ pub async fn detect(env: &ProviderEnv<'_>) -> Vec<ProviderView> {
             adapter_pinned: None,
             auth_mode: AuthMode::None,
             auth_label: None,
-            policy: policy_for(&c.id, AuthMode::None),
+            policy: custom_policy(c),
             status_message: msg,
             actions: vec!["remove_custom".into()],
             verified: false,

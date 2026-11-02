@@ -111,7 +111,7 @@ a:hover { text-decoration: underline; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
 /* ---------- layout ---------- */
-.app { display: grid; grid-template-columns: 224px 1fr; height: 100%; }
+.app { display: grid; grid-template-columns: 224px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: 100vh; overflow: hidden; }
 .sidebar {
   background: var(--sidebar);
   border-right: 1px solid var(--border);
@@ -138,15 +138,21 @@ a:hover { text-decoration: underline; }
 .nav-sep { height: 1px; background: var(--border); margin: 10px 6px; }
 .sidebar-foot { margin-top: auto; padding: 8px; font-size: 11.5px; color: var(--text-3); }
 
-.main { display: flex; flex-direction: column; min-width: 0; height: 100%; }
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; overflow: hidden; }
 .topbar {
   height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 12px;
   padding: 0 24px; border-bottom: 1px solid transparent;
 }
 .topbar h1 { font-size: 15px; margin: 0; font-weight: 600; }
 .topbar .spacer { flex: 1; }
-.content { flex: 1; overflow: auto; padding: 8px 24px 40px; }
-.content-narrow { max-width: 880px; }
+.content { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px 24px 40px; scrollbar-gutter: stable; }
+.content-narrow { max-width: 920px; margin: 0 auto; }
+.sidebar { overflow-y: auto; min-height: 0; }
+/* Always-visible scrollbars (macOS hides overlay scrollbars by default). */
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; border: 3px solid transparent; background-clip: content-box; min-height: 40px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-3); border: 3px solid transparent; background-clip: content-box; }
 
 /* ---------- primitives ---------- */
 .btn {
@@ -280,7 +286,7 @@ a:hover { text-decoration: underline; }
 .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 
 /* ---------- activity ---------- */
-.activity { display: grid; grid-template-columns: 260px 1fr; gap: 14px; height: calc(100% - 4px); min-height: 380px; }
+.activity { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 14px; height: 100%; min-height: 0; max-width: 1280px; margin: 0 auto; }
 .task-list { overflow: auto; padding: 6px; }
 .task-item {
   width: 100%; text-align: left; border: 0; background: none; border-radius: var(--r-md);

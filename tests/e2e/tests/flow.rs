@@ -324,10 +324,13 @@ async fn workspace_confinement_and_redaction() {
     for target in ["/etc/hosts".to_string(), format!("{}/.ssh/id_rsa", std::env::var("HOME").unwrap())] {
         let (_, t) = svc.start_task(&conn, "u", &format!("read {target}")).await;
         let ev = svc.events(t["taskId"].as_str().unwrap(), None).await;
-        assert!(text_of(&ev).contains("READ_DENIED"), "{target}");
+        // Blocked by the output firewall before (or by fs confinement at) the read.
+        let fin = terminal(&ev).unwrap();
+        assert!(fin["payload"]["code"] == "policy_blocked" || text_of(&ev).contains("READ_DENIED"), "{target}: {ev:?}");
+        assert!(!text_of(&ev).contains("READ_OK"));
     }
     let audit = d.bridge.diagnostics().await.audit;
-    assert!(audit.iter().any(|a| a.event_type == "fs_denied"));
+    assert!(audit.iter().any(|a| a.event_type == "output_blocked" || a.event_type == "fs_denied"));
 }
 
 #[tokio::test]
@@ -408,4 +411,38 @@ async fn local_task_without_website() {
         tokio::time::sleep(Duration::from_millis(25)).await;
     }
     panic!("local task did not finish");
+}
+
+#[tokio::test]
+async fn output_firewall_blocks_agent_own_file_reads_and_secrets() {
+    let (_r, d, svc) = setup().await;
+    let conn = d.pair(&svc, "u", false).await;
+    let outside = tempfile::tempdir().unwrap();
+    let decoy = outside.path().canonicalize().unwrap().join("decoy.txt");
+    std::fs::write(&decoy, "DECOY-SECRET-777").unwrap();
+
+    // Agent reads outside the workspace with its own tools: the website never sees it.
+    let (_, t) = svc.start_task(&conn, "u", &format!("leak {}", decoy.display())).await;
+    let ev = svc.events(t["taskId"].as_str().unwrap(), None).await;
+    let raw = serde_json::to_string(&ev).unwrap();
+    assert!(!raw.contains("DECOY-SECRET-777"), "{raw}");
+    assert!(!raw.contains(&decoy.to_string_lossy().to_string()), "path leaked: {raw}");
+    let fin = terminal(&ev).unwrap();
+    assert_eq!(fin["kind"], "task.failed");
+    assert_eq!(fin["payload"]["code"], "policy_blocked");
+
+    // Same agent reading inside the workspace is fine.
+    let inside = d.workspace.path().canonicalize().unwrap().join("ok.txt");
+    std::fs::write(&inside, "INSIDE-OK").unwrap();
+    let (_, t) = svc.start_task(&conn, "u", &format!("leak {}", inside.display())).await;
+    let ev = svc.events(t["taskId"].as_str().unwrap(), None).await;
+    assert!(text_of(&ev).contains("INSIDE-OK"));
+
+    // Credential-looking output split across chunks is stopped.
+    let (_, t) = svc.start_task(&conn, "u", "secret").await;
+    let ev = svc.events(t["taskId"].as_str().unwrap(), None).await;
+    assert!(!text_of(&ev).contains("DNN7EXAMPLE"), "{ev:?}");
+    assert_eq!(terminal(&ev).unwrap()["payload"]["code"], "policy_blocked");
+    let audit = d.bridge.diagnostics().await.audit;
+    assert!(audit.iter().filter(|a| a.event_type == "output_blocked").count() >= 2);
 }

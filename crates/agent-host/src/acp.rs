@@ -172,6 +172,17 @@ pub struct ToolCallFields {
     pub kind: Option<String>,
     #[serde(default)]
     pub status: Option<String>,
+    /// Raw tool input as sent by the agent (inspected locally, never forwarded).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_input: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub locations: Vec<ToolCallLocation>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolCallLocation {
+    pub path: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -14,3 +14,5 @@ Format: date — decision — why.
 - 2026-11-02 — **Built-in "Test agent"**: the desktop binary itself acts as a mock ACP agent with `--acp-mock-agent`, so the bridge can be demonstrated without any AI provider and E2E tests use the same agent.
 - 2026-11-02 — **No E2EE yet.** TLS to the relay; relay keeps no prompts/results on disk. E2EE requires a threat-modelled, audited design (see `docs/threat-model.md`); not claimed.
 - 2026-11-02 — Pairing tickets carry the relay URL for display only; the desktop refuses links for a relay other than its configured one.
+- 2026-11-03 — **Output firewall for website tasks.** Real-agent testing showed adapters bypass ACP `fs/*` and Codex `read-only` reads the whole disk without prompting (a website prompt could read `~/.ssh`). Adapters are pinned and must not be patched, so the bridge enforces workspace scope on tool calls/permissions and scans outgoing text. Claude `default` mode asked before an outside read.
+- 2026-11-03 — `auto` removed from "Can edit" mode candidates (Claude's `auto` lets the model decide permissions); explicit forbidden-mode list.

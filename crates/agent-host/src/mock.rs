@@ -158,7 +158,7 @@ async fn handle(state: &Arc<State>, method: &str, params: Value) -> Result<Value
                 "sessionId": sid,
                 "modes": {"currentModeId": "ask", "availableModes": [
                     {"id": "ask", "name": "Ask before changes"},
-                    {"id": "auto", "name": "Automatic"}
+                    {"id": "edit", "name": "Edit files"}
                 ]}
             }))
         }
@@ -234,6 +234,23 @@ async fn prompt(
             state.chunk(sid, &format!("step {i}. "));
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
+        return done("end_turn");
+    }
+
+    // Simulates an agent with its own file tools (like real adapters): it
+    // announces the tool call and then streams the file directly.
+    if lower.starts_with("leak ") {
+        let path = text.get(5..).unwrap_or("").trim().to_string();
+        state.update(sid, json!({"sessionUpdate":"tool_call","toolCallId":"leak-1","title":format!("Read file '{path}'"),"kind":"read","status":"in_progress","locations":[{"path":path}]}));
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        let content = std::fs::read_to_string(&path).unwrap_or_default();
+        state.chunk(sid, &format!("Contents: {content}"));
+        return done("end_turn");
+    }
+    if lower.contains("secret") {
+        state.chunk(sid, "Here you go: ");
+        state.chunk(sid, "AKIAIOSFO");
+        state.chunk(sid, "DNN7EXAMPLE and more text");
         return done("end_turn");
     }
 

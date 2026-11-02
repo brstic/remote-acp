@@ -9,6 +9,7 @@ Assets: user files outside the chosen workspace, provider credentials, the abili
 | Wrong service/tenant/user | ownership + external user binding on relay; independent desktop check | `tenant_and_user_isolation`, `grant_authorization` |
 | Replay/reorder/duplicate | per-task sequences, dedupe, at-most-once dispatch, idempotency keys | `reconnect_mid_task_without_duplicates`, `idempotency_and_single_active_task` |
 | Prompt asks for ~/.ssh, /etc, parent dirs | fs confinement + denylist; restricted agent mode | `workspace_confinement_and_redaction`, policy unit tests |
+| Agent reads outside the workspace with its own tools (Codex read-only reads anything) | output firewall: tool-call/permission path inspection, task stop, no further forwarding; secret scanning | `output_firewall_blocks_agent_own_file_reads_and_secrets`, `firewall_codex_through_bridge`, `firewall_claude_through_bridge` |
 | Symlink / hard-link escape | canonicalization, nlink check | `symlink_escape_denied`, `hardlink_denied` |
 | Website approves its own permission prompt | no API exists; permissions answered only in desktop UI | `permission_allow_and_deny_are_local_only` |
 | Frame flood / huge payload | size limits, bounded channels, backpressure, rate limits | `rejects_oversized_prompt_and_frame`, `flood_with_slow_consumer_backpressure` |

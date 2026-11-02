@@ -16,8 +16,10 @@
         "title": "Remote ACP Bridge",
         "width": 1080,
         "height": 720,
-        "minWidth": 760,
-        "minHeight": 520,
+        "minWidth": 900,
+        "minHeight": 600,
+        "maxWidth": 1600,
+        "maxHeight": 1200,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "trafficLightPosition": { "x": 18, "y": 22 }
