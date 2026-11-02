@@ -3,7 +3,7 @@ import fs from "node:fs";
 const S = process.env.OUT_DIR ?? "."; const log = (m) => { console.log(new Date().toISOString().slice(11, 19), m); };
 const browser = await chromium.launch({ executablePath: process.env.BROWSER, headless: true });
 const page = await browser.newPage({ viewport: { width: 1200, height: 820 }, bypassCSP: true });
-await page.goto("${process.env.DEMO_URL ?? "http://127.0.0.1:3000/"}");
+await page.goto(process.env.DEMO_URL ?? "http://127.0.0.1:3000/");
 await page.fill("#login-name", "gui" + Date.now().toString(36).slice(-5));
 await page.click('#login-form button[type="submit"]');
 await page.getByRole("button", { name: /Connect desktop agent/i }).click();
