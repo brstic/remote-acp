@@ -7,7 +7,7 @@ _Last updated: 2026-11-02_
 - **ACP host** (`agent-host`): ACP v1 over stdio, limits, backpressure, correlation, cancel, crash handling, process-group kill, controlled env; deterministic mock agent.
 - **Policy** (`connection-policy`): workspace confinement (symlink/hardlink/denylist), grant authorization, access levels.
 - **Relay**: service auth, pairing (ticket + code), connections in SQLite, task routing with idempotency and at-most-once dispatch, SSE with resume, rate limits, sweeper (offline grace, approval timeout, max duration), revocation both ways, well-known domain verification.
-- **Desktop engine** (`bridge-core`): registration + keychain, WSS loop with heartbeat/backoff/resend, consent, per-task approval, permissions (local only), kill switch, pause/revoke, sessions with restricted modes, provider registry + policy, pinned/integrity-checked adapter install, Codex official login, Claude API-key mode, custom ACP agents (hash-pinned), audit log, diagnostics, redaction.
+- **Desktop engine** (`bridge-core`): registration + keychain, WSS loop with heartbeat/backoff/resend, consent, per-task approval, permissions (local only), kill switch, pause/revoke, sessions with restricted modes, provider registry + policy, pinned/integrity-checked adapter install, Codex and Claude Code official logins (ACP only), custom ACP agents (hash-pinned), audit log, diagnostics, redaction.
 - **Desktop app** (Tauri 2): Overview, AI Providers, Connected Websites, Activity (live transcript, local test tasks), Settings, Diagnostics, Help, onboarding, consent sheet, decision tray, toasts, light/dark, `remoteacp://` deep links, single instance, tray menu, notifications, launch at login.
 - **Web**: `@remote-acp/web-sdk` (auto-resuming SSE), `@remote-acp/browser-helper`, `@remote-acp/protocol-types`, demo website.
 
@@ -27,7 +27,7 @@ _Last updated: 2026-11-02_
 |---|---|
 | 1 Install on clean macOS/Windows/Linux | macOS build verified; Windows/Linux via CI matrix (not run on real machines) |
 | 2 Detect agent / guide install | ✅ |
-| 3 Official provider auth + accurate status | ✅ Codex (real); Claude API-key path implemented, not exercised with a real key |
+| 3 Official provider auth + accurate status | ✅ Codex (ChatGPT) and Claude Code (Claude Max) through the full product path |
 | 4 Pairing link from real browser → app | ✅ (macOS `open remoteacp://…`) |
 | 5 Verified identity + scoped consent | ✅ |
 | 6–8 Task from website, live events at website and desktop | ✅ (E2E + browser) |
@@ -49,5 +49,4 @@ _Last updated: 2026-11-02_
 - Windows: all Rust crates except the Tauri shell `cargo check` clean for `x86_64-pc-windows-gnu`; app not run on a real Windows machine. Linux: not run (no Linux host/containers here; CI matrix builds and tests it).
 - No hosted relay is running yet: a deployable kit exists (`deploy/relay`: Docker + Caddy automatic TLS); it needs a server and a domain.
 - No E2EE (TLS + no persistence on relay only).
-- Claude adapter verified with a local Claude Code login (compatibility only); the product's API-key launch path is not exercised with a real key.
 - Next.js demo from the plan replaced by a framework-free Node demo.

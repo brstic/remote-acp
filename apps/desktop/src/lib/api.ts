@@ -30,7 +30,6 @@ export const api = {
   installAdapter: (provider: string) => call<string>("install_adapter", { provider }),
   signIn: (provider: string) => call<void>("provider_sign_in", { provider }),
   signOut: (provider: string) => call<void>("provider_sign_out", { provider }),
-  setApiKey: (provider: string, key: string) => call<void>("set_api_key", { provider, key }),
   addCustomAgent: (name: string, program: string, args: string[]) =>
     call<void>("add_custom_agent", { name, program, args }),
   removeCustomAgent: (id: string) => call<void>("remove_custom_agent", { id }),

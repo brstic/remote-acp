@@ -76,11 +76,6 @@ async fn provider_sign_out(state: State<'_, AppState>, provider: String) -> CmdR
 }
 
 #[tauri::command]
-async fn set_api_key(state: State<'_, AppState>, provider: String, key: String) -> CmdResult<()> {
-    Ok(state.bridge.set_api_key(&provider, &key).await?)
-}
-
-#[tauri::command]
 async fn add_custom_agent(state: State<'_, AppState>, name: String, program: String, args: Vec<String>) -> CmdResult<()> {
     Ok(state.bridge.add_custom_agent(&name, &program, args).await?)
 }
@@ -383,7 +378,6 @@ pub fn run() {
             install_adapter,
             provider_sign_in,
             provider_sign_out,
-            set_api_key,
             add_custom_agent,
             remove_custom_agent,
             begin_pairing,

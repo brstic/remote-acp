@@ -210,7 +210,7 @@ export function Help() {
       <div className="card card-pad stack">
         <b>How it works</b>
         <ol className="muted" style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
-          <li>Set up an AI provider (Codex or Claude Code) using its official sign-in.</li>
+          <li>Set up an AI provider (Codex or Claude Code): install its connector and sign in with its official sign-in.</li>
           <li>On a website that supports Remote ACP Bridge, click <b>Connect desktop agent</b> and approve the request here.</li>
           <li>When the website starts a task, you see it live here. You can stop it or disconnect at any time.</li>
         </ol>
@@ -226,7 +226,7 @@ export function Help() {
       <div className="card card-pad stack">
         <b>Provider rules</b>
         <div className="muted small">
-          Claude subscription sign-in can't be used for website connections under Anthropic's terms; use an Anthropic API key instead. Codex website tasks use your ChatGPT plan's limits when you sign in with ChatGPT.
+          Codex and Claude Code both run through their official ACP adapters with your own official sign-in (codex login / claude auth login). Tasks count toward your plan's usage limits. The bridge never sees your password or tokens.
         </div>
       </div>
       <div className="row">

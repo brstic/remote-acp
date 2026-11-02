@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, ExternalLink, KeyRound, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ExternalLink, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { api, openExternal, pickFile } from "../lib/api";
 import { useBridge } from "../lib/store";
 import type { ProviderView } from "../lib/types";
@@ -8,13 +8,12 @@ import { ProviderLogo, Spinner, providerBadge } from "../components/ui";
 const LINKS: Record<string, string> = {
   open_node_download: "https://nodejs.org/en/download",
   open_codex_install: "https://developers.openai.com/codex/cli",
+  open_claude_install: "https://code.claude.com/docs/en/setup",
 };
 
 function ProviderDetail({ p }: { p: ProviderView }) {
   const { run } = useBridge();
   const [busy, setBusy] = useState<string | null>(null);
-  const [keyOpen, setKeyOpen] = useState(false);
-  const [key, setKey] = useState("");
 
   const act = async (name: string, fn: () => Promise<unknown>, ok?: string) => {
     setBusy(name);
@@ -45,7 +44,7 @@ function ProviderDetail({ p }: { p: ProviderView }) {
             <><dt>Connector</dt><dd>{p.adapterVersion ? <span className="mono">{p.adapterVersion}</span> : <span className="faint">not installed</span>} <span className="faint small">(verified version {p.adapterPinned})</span></dd></>
           )}
           <dt>Sign-in</dt>
-          <dd>{p.authMode === "subscription" ? `Subscription (${p.authLabel})` : p.authMode === "api_key" ? "API key (billed to your API account)" : p.id === "mock" ? "Not needed" : "Not signed in"}</dd>
+          <dd>{p.authMode === "subscription" ? `Signed in (${p.authLabel ?? "subscription"})` : p.authMode === "api_key" ? "Signed in with an API key (via the provider's CLI)" : p.id === "mock" ? "Not needed" : "Not signed in"}</dd>
         </dl>
       </div>
       <div className="setting-row" style={{ display: "block" }}>
@@ -67,53 +66,20 @@ function ProviderDetail({ p }: { p: ProviderView }) {
           )}
           {p.actions.includes("sign_in") && (
             <button className="btn btn-primary" disabled={!!busy} onClick={() => act("signin", () => api.signIn(p.id), "Finish signing in in your browser")}>
-              Sign in with ChatGPT <ExternalLink size={13} />
-            </button>
-          )}
-          {(p.actions.includes("sign_in_api_key") || p.actions.includes("set_api_key")) && (
-            <button className={`btn ${p.actions.includes("set_api_key") ? "btn-primary" : ""}`} onClick={() => setKeyOpen((v) => !v)}>
-              <KeyRound size={14} /> Use an API key
+              {p.id === "codex" ? "Sign in with ChatGPT" : p.id === "claude" ? "Sign in to Claude" : "Sign in"} <ExternalLink size={13} />
             </button>
           )}
           {p.actions.includes("sign_out") && (
             <button className="btn" disabled={!!busy} onClick={() => act("signout", () => api.signOut(p.id), "Signed out")}>Sign out</button>
-          )}
-          {p.actions.includes("remove_api_key") && (
-            <button className="btn btn-danger" disabled={!!busy} onClick={() => act("signout", () => api.signOut(p.id), "API key removed")}>Remove API key</button>
           )}
           {p.actions.includes("remove_custom") && (
             <button className="btn btn-danger" onClick={() => act("rm", () => api.removeCustomAgent(p.id), "Agent removed")}><Trash2 size={14} /> Remove</button>
           )}
           {p.actions.filter((a) => LINKS[a]).map((a) => (
             <button key={a} className="btn btn-primary" onClick={() => void openExternal(LINKS[a])}>
-              {a === "open_node_download" ? "Get Node.js" : "Install Codex"} <ExternalLink size={13} />
+              {a === "open_node_download" ? "Get Node.js" : a === "open_claude_install" ? "Install Claude Code" : "Install Codex"} <ExternalLink size={13} />
             </button>
           ))}
-        </div>
-      )}
-      {keyOpen && (
-        <div className="setting-row" style={{ display: "block" }}>
-          <form
-            className="row"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              setBusy("key");
-              const ok = await run(() => api.setApiKey(p.id, key), "API key saved");
-              setBusy(null);
-              if (ok) {
-                setKey("");
-                setKeyOpen(false);
-              }
-            }}
-          >
-            <input className="input grow" type="password" autoComplete="off" placeholder={p.id === "claude" ? "sk-ant-…" : "sk-…"} value={key} onChange={(e) => setKey(e.target.value)} aria-label="API key" />
-            <button className="btn btn-primary" disabled={!key || busy === "key"}>{busy === "key" ? <Spinner /> : "Save"}</button>
-          </form>
-          <div className="small faint" style={{ marginTop: 6 }}>
-            {p.id === "claude"
-              ? "Stored in your system keychain and passed only to the local Claude connector. Usage is billed to your Anthropic API account."
-              : "Passed directly to the official Codex CLI (codex login --with-api-key). Usage is billed to your OpenAI API account."}
-          </div>
         </div>
       )}
     </div>

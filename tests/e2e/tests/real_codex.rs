@@ -8,12 +8,22 @@ use e2e_tests::*;
 #[tokio::test]
 #[ignore]
 async fn codex_through_bridge() {
+    through_bridge("codex", "read-only").await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn claude_through_bridge() {
+    through_bridge("claude", "default").await;
+}
+
+async fn through_bridge(provider: &str, expected_mode: &str) {
     let relay = start_relay().await;
     let d = start_desktop_with(&relay.url, std::path::PathBuf::from(env!("CARGO_BIN_EXE_mock-acp-agent"))).await;
-    let version = d.bridge.install_adapter("codex").await.expect("install codex adapter");
-    println!("installed codex-acp {version}");
-    let codex = d.bridge.providers().into_iter().find(|p| p.id == "codex").unwrap();
-    println!("codex provider: {:?} - {}", codex.state, codex.status_message);
+    let version = d.bridge.install_adapter(provider).await.expect("install codex adapter");
+    println!("installed {provider} adapter {version}");
+    let codex = d.bridge.providers().into_iter().find(|p| p.id == provider).unwrap();
+    println!("{provider} provider: {:?} - {}", codex.state, codex.status_message);
     assert_eq!(codex.state, bridge_core::providers::ProviderState::Ready);
 
     let svc = Service::new(&relay.url, SVC_A, SECRET_A);
@@ -21,7 +31,7 @@ async fn codex_through_bridge() {
     let req = d.bridge.begin_pairing(p["url"].as_str().unwrap()).await.unwrap();
     // Codex ChatGPT mode requires acknowledging the plan notice.
     let mut opts = bridge_core::AcceptOptions {
-        provider_id: "codex".into(),
+        provider_id: provider.into(),
         workspace: d.workspace_path(),
         access: Default::default(),
         require_task_approval: true,
@@ -39,14 +49,14 @@ async fn codex_through_bridge() {
     d.bridge.approve_task(&id, true).await.unwrap();
     let ev = svc.events(&id, None).await;
     let text = text_of(&ev);
-    println!("codex said: {text:?}");
+    println!("{provider} said: {text:?}");
     println!("terminal: {:?}", terminal(&ev));
     let diag = d.bridge.diagnostics().await;
     println!("session: {:?}", diag.sessions.first().map(|s| (&s.agent_name, &s.current_mode, s.sandbox_enforced)));
     assert!(text.contains("BRIDGE_OK"));
     assert_eq!(terminal(&ev).unwrap()["kind"], "task.completed");
     let s = diag.sessions.first().unwrap();
-    assert_eq!(s.current_mode.as_deref(), Some("read-only"));
+    assert_eq!(s.current_mode.as_deref(), Some(expected_mode));
     // No account email / auth label leaked to the website stream.
     let raw = serde_json::to_string(&ev).unwrap();
     assert!(!raw.contains('@'), "{raw}");

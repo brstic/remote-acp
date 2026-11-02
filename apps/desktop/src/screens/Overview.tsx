@@ -61,7 +61,7 @@ export function Overview() {
                   <button className="btn btn-sm" onClick={() => navigate("providers")}>Manage</button>
                 ) : (
                   <button className="btn btn-sm btn-primary" onClick={() => navigate("providers")}>
-                    {p.actions.includes("sign_in") || p.actions.includes("set_api_key") ? "Sign in" : p.actions.includes("install_adapter") ? "Set up" : "Details"}
+                    {p.actions.includes("sign_in") ? "Sign in" : p.actions.includes("install_adapter") ? "Set up" : "Details"}
                   </button>
                 )}
               </div>

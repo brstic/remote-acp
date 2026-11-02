@@ -1,13 +1,13 @@
-# Provider compliance
+# Providers
 
-Policy registry: `crates/bridge-core/src/providers.rs::policy_for`. Change a mode there to disable it everywhere.
+Both providers run **only through their official ACP adapters** with the user's **own official sign-in**. There is no API-key mode in the app.
 
-| Provider | Mode | Website use | Why |
+| Provider | Adapter (pinned, integrity-checked) | Sign-in | Restricted mode used for website tasks |
 |---|---|---|---|
-| Codex | ChatGPT sign-in (official `codex login`) | Allowed **with notice**; user must acknowledge at consent | Codex supports ChatGPT plan usage in local clients; usage counts against the user's plan. Validate the intended third-party hosted workflow with OpenAI before marketing it as subscription-powered. |
-| Codex | API key (`codex login --with-api-key`) | Allowed | Billed to the user's OpenAI API account |
-| Claude | Subscription / Claude.ai login | **Blocked** | Anthropic's Claude Code legal terms restrict routing consumer subscription credentials for third-party products |
-| Claude | Anthropic API key | Allowed | Stored in OS keychain; passed only to the local adapter; isolated `CLAUDE_CONFIG_DIR` |
-| Custom ACP agent | — | Allowed with notice | Not verified; executable hash pinned at add time |
+| Codex | `@agentclientprotocol/codex-acp` 2.5.0 | `codex login` (ChatGPT) | `read-only` / `workspace-write` |
+| Claude Code | `@agentclientprotocol/claude-agent-acp` 0.100.0 | `claude auth login` (Claude subscription) | `default` (asks before changes) / `acceptEdits` |
+| Custom ACP agent | user-chosen executable (hash pinned) | agent's own | adapter-dependent |
 
-The bridge never reads `~/.codex`, `~/.claude`, Keychain items of other apps, or browser cookies. Provider marks are not shipped; plain-text initials are used. Re-check terms before commercial distribution.
+The consent screen shows a notice that tasks count toward the user's plan limits, and the user confirms it. The bridge never reads `~/.codex`, `~/.claude`, Keychain items of other apps or browser cookies; sign-in status comes from the official CLIs (`codex login status`, `claude auth status`), and only the logged-in flag and plan name are used locally. Account identity sent by adapters (`_auth/status_update`) is never forwarded.
+
+Intended use: a person using their own agent installation from sites they control. If you distribute this to other people for use with third-party websites, review OpenAI's and Anthropic's terms for that scenario first.

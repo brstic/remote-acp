@@ -81,10 +81,9 @@ pub fn policy_for(provider: &str, mode: AuthMode) -> PolicyDecision {
             AllowedWithNotice,
             "Uses your ChatGPT plan's Codex usage limits. Website tasks count toward your plan. Make sure your use complies with OpenAI's terms for your plan.",
         ),
-        ("claude", AuthMode::ApiKey) => (Allowed, "Uses your Anthropic API key. API usage is billed to your Anthropic account."),
-        ("claude", AuthMode::Subscription) => (
-            Blocked,
-            "This connection type isn't available for this provider. Anthropic does not allow Claude subscription sign-in to power third-party website requests. You can use a supported API-key configuration instead.",
+        ("claude", _) => (
+            AllowedWithNotice,
+            "Uses your own Claude Code sign-in through the official Claude Code ACP adapter. Tasks count toward your Claude plan's usage limits. Make sure your use follows Anthropic's terms for your plan.",
         ),
         (p, _) if p.starts_with("custom:") => (
             AllowedWithNotice,
@@ -98,16 +97,11 @@ pub fn policy_for(provider: &str, mode: AuthMode) -> PolicyDecision {
     }
 }
 
-/// Custom agents that wrap a known provider inherit that provider's rules, so
-/// the Claude subscription restriction can't be bypassed by re-adding the
-/// adapter as a "custom" agent.
+/// Custom agents that wrap a known provider inherit that provider's notice.
 pub fn custom_policy(c: &CustomAgent) -> PolicyDecision {
     let sig = format!("{} {}", c.program.display(), c.args.join(" ")).to_lowercase();
     if sig.contains("claude") || sig.contains("anthropic") {
-        return PolicyDecision {
-            remote: RemotePolicy::Blocked,
-            note: "This looks like a Claude agent using your local Claude sign-in. Use the built-in Claude Code provider with an API key for website connections.".into(),
-        };
+        return policy_for("claude", AuthMode::Subscription);
     }
     if sig.contains("codex") {
         return policy_for("codex", AuthMode::Subscription);
@@ -119,12 +113,12 @@ pub fn custom_policy(c: &CustomAgent) -> PolicyDecision {
 mod policy_tests {
     use super::*;
     #[test]
-    fn custom_claude_is_blocked_for_websites() {
+    fn provider_policies() {
         let mk = |p: &str, a: &str| CustomAgent { id: "custom:x".into(), name: "x".into(), program: p.into(), args: vec![a.into()], sha256: String::new() };
-        assert_eq!(custom_policy(&mk("/usr/local/bin/node", "/x/claude-agent-acp/dist/index.js")).remote, RemotePolicy::Blocked);
+        assert_eq!(custom_policy(&mk("/usr/local/bin/node", "/x/claude-agent-acp/dist/index.js")).note, policy_for("claude", AuthMode::Subscription).note);
         assert_eq!(custom_policy(&mk("/opt/bin/my-agent", "--acp")).remote, RemotePolicy::AllowedWithNotice);
-        assert_eq!(policy_for("claude", AuthMode::Subscription).remote, RemotePolicy::Blocked);
-        assert_eq!(policy_for("claude", AuthMode::ApiKey).remote, RemotePolicy::Allowed);
+        assert_eq!(policy_for("claude", AuthMode::Subscription).remote, RemotePolicy::AllowedWithNotice);
+        assert_eq!(policy_for("codex", AuthMode::Subscription).remote, RemotePolicy::AllowedWithNotice);
     }
 }
 
@@ -219,7 +213,7 @@ pub fn base_env() -> Vec<(String, String)> {
     for k in [
         "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "SystemRoot", "SYSTEMROOT",
         "APPDATA", "LOCALAPPDATA", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "ProgramData", "ProgramFiles", "TEMP", "TMP",
-        "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "DBUS_SESSION_BUS_ADDRESS", "CODEX_HOME",
+        "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "DBUS_SESSION_BUS_ADDRESS", "CODEX_HOME", "CLAUDE_CONFIG_DIR",
         "SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY",
     ] {
         if let Ok(v) = std::env::var(k) {
@@ -417,8 +411,7 @@ pub async fn detect(env: &ProviderEnv<'_>) -> Vec<ProviderView> {
             (st, format!("{e}. Click Install to add the verified Codex connector."))
         } else if !signed_in {
             actions.push("sign_in".into());
-            actions.push("sign_in_api_key".into());
-            (ProviderState::SignedOut, "Sign in with ChatGPT or an API key to use Codex.".to_string())
+            (ProviderState::SignedOut, "Sign in to Codex (ChatGPT) to use it.".to_string())
         } else {
             actions.push("sign_out".into());
             actions.push("install_adapter".into());
@@ -442,48 +435,53 @@ pub async fn detect(env: &ProviderEnv<'_>) -> Vec<ProviderView> {
         });
     }
 
-    // Claude: only API-key mode is offered for website connections.
+    // Claude Code: official sign-in (`claude auth login`) via the official ACP adapter.
     {
         let cli = which("claude");
         let version = match &cli {
             Some(c) => run_capture(c, &["--version"], Duration::from_secs(10)).await.map(|(_, v)| v),
             None => None,
         };
+        let auth = match &cli {
+            Some(c) => claude_auth_status(c).await,
+            None => None,
+        };
         let adapter = verify_adapter(&env.adapters_dir, &CLAUDE_ADAPTER);
         let adapter_version = installed_adapter_version(&env.adapters_dir, &CLAUDE_ADAPTER);
-        let has_key = env.secrets.get("provider:claude:api_key").is_some();
         let node = node_ok().await;
+        let signed_in = auth.as_ref().map(|a| a.0).unwrap_or(false);
+        let label = auth.and_then(|a| a.1);
         let mut actions = vec!["recheck".to_string()];
         let (state, msg) = if let Err(e) = &node {
             actions.push("open_node_download".into());
             (ProviderState::NotInstalled, e.clone())
+        } else if cli.is_none() {
+            actions.push("open_claude_install".into());
+            (ProviderState::NotInstalled, "Claude Code is not installed. Install it, then recheck.".to_string())
         } else if let Err(e) = &adapter {
             actions.push("install_adapter".into());
             let st = if adapter_version.is_some() { ProviderState::Broken } else { ProviderState::Installed };
             (st, format!("{e}. Click Install to add the verified Claude connector."))
-        } else if !has_key {
-            actions.push("set_api_key".into());
-            (
-                ProviderState::SignedOut,
-                "Add an Anthropic API key. Claude subscription sign-in can't be used for website connections.".to_string(),
-            )
+        } else if !signed_in {
+            actions.push("sign_in".into());
+            (ProviderState::SignedOut, "Sign in to Claude Code to use it.".to_string())
         } else {
-            actions.push("remove_api_key".into());
+            actions.push("sign_out".into());
             actions.push("install_adapter".into());
-            (ProviderState::Ready, "Using your Anthropic API key".to_string())
+            (ProviderState::Ready, format!("Signed in ({})", label.clone().unwrap_or_else(|| "Claude".into())))
         };
         out.push(ProviderView {
             id: "claude".into(),
             name: "Claude Code".into(),
-            description: "Anthropic's Claude agent, via the official ACP adapter (API key mode).".into(),
+            description: "Anthropic's Claude Code agent, via the official ACP adapter.".into(),
             state,
             cli_path: cli.map(|p| p.to_string_lossy().to_string()),
             cli_version: version,
             adapter_version,
             adapter_pinned: Some(CLAUDE_ADAPTER.version.into()),
-            auth_mode: if has_key { AuthMode::ApiKey } else { AuthMode::None },
-            auth_label: has_key.then(|| "API key".to_string()),
-            policy: policy_for("claude", if has_key { AuthMode::ApiKey } else { AuthMode::Subscription }),
+            auth_mode: if signed_in { AuthMode::Subscription } else { AuthMode::None },
+            auth_label: if signed_in { label } else { None },
+            policy: policy_for("claude", AuthMode::Subscription),
             status_message: msg,
             actions,
             verified: true,
@@ -522,7 +520,7 @@ pub async fn detect(env: &ProviderEnv<'_>) -> Vec<ProviderView> {
 
 /// Build the launch command for a provider, re-verifying everything.
 pub async fn launch_command(env: &ProviderEnv<'_>, provider: &str, cwd: &Path) -> Result<AgentCommand, String> {
-    let mut base = base_env();
+    let base = base_env();
     match provider {
         "mock" => {
             let (program, args) = env.mock_command.clone().ok_or("Test agent is not available")?;
@@ -541,15 +539,6 @@ pub async fn launch_command(env: &ProviderEnv<'_>, provider: &str, cwd: &Path) -
         "claude" => {
             let node = node_ok().await?;
             let entry = verify_adapter(&env.adapters_dir, &CLAUDE_ADAPTER)?;
-            let key = env
-                .secrets
-                .get("provider:claude:api_key")
-                .ok_or("Add an Anthropic API key in AI Providers first")?;
-            base.push(("ANTHROPIC_API_KEY".into(), key));
-            // Isolated config dir so a consumer subscription login is never picked up.
-            let cfg = env.adapters_dir.join("claude-config");
-            let _ = std::fs::create_dir_all(&cfg);
-            base.push(("CLAUDE_CONFIG_DIR".into(), cfg.to_string_lossy().to_string()));
             Ok(AgentCommand {
                 program: node,
                 args: vec![entry.to_string_lossy().to_string()],
@@ -593,30 +582,47 @@ pub async fn codex_sign_in() -> Result<(), String> {
     Ok(())
 }
 
-/// `codex login --with-api-key`, key passed on stdin (never on argv).
-pub async fn codex_sign_in_api_key(key: &str) -> Result<(), String> {
-    use tokio::io::AsyncWriteExt;
-    let cli = which("codex").ok_or("Codex is not installed")?;
+/// Official status from the Claude Code CLI. Only `loggedIn` and the plan
+/// name are used; account identity fields are ignored and never stored.
+async fn claude_auth_status(cli: &Path) -> Option<(bool, Option<String>)> {
+    let (_, out) = run_capture(cli, &["auth", "status", "--json"], Duration::from_secs(15)).await?;
+    let start = out.find('{')?;
+    let v: serde_json::Value = serde_json::from_str(&out[start..out.rfind('}')? + 1]).ok()?;
+    let logged_in = v.get("loggedIn").and_then(|x| x.as_bool()).unwrap_or(false);
+    let label = v.get("subscriptionType").and_then(|x| x.as_str()).map(|t| match t {
+        "max" => "Claude Max".to_string(),
+        "pro" => "Claude Pro".to_string(),
+        "team" => "Claude Team".to_string(),
+        "enterprise" => "Claude Enterprise".to_string(),
+        other => format!("Claude {other}"),
+    });
+    Some((logged_in, label))
+}
+
+/// Launch the official Claude Code browser sign-in (`claude auth login`).
+pub async fn claude_sign_in() -> Result<(), String> {
+    let cli = which("claude").ok_or("Claude Code is not installed")?;
     let mut child = Command::new(cli)
-        .args(["login", "--with-api-key"])
+        .args(["auth", "login", "--claudeai"])
         .env_clear()
         .envs(base_env())
-        .stdin(Stdio::piped())
+        .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::null())
         .spawn()
         .map_err(|e| e.to_string())?;
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(key.trim().as_bytes()).await.map_err(|e| e.to_string())?;
-    }
-    let out = tokio::time::timeout(Duration::from_secs(30), child.wait_with_output())
-        .await
-        .map_err(|_| "Codex sign-in timed out".to_string())?
-        .map_err(|e| e.to_string())?;
-    if out.status.success() {
-        Ok(())
-    } else {
-        Err("Codex rejected the API key".into())
+    tokio::spawn(async move {
+        let _ = tokio::time::timeout(Duration::from_secs(600), child.wait()).await;
+        let _ = child.kill().await;
+    });
+    Ok(())
+}
+
+pub async fn claude_sign_out() -> Result<(), String> {
+    let cli = which("claude").ok_or("Claude Code is not installed")?;
+    match run_capture(&cli, &["auth", "logout"], Duration::from_secs(15)).await {
+        Some((true, _)) => Ok(()),
+        _ => Err("Claude Code sign-out failed".into()),
     }
 }
 

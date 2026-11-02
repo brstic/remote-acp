@@ -29,7 +29,7 @@ pnpm --dir apps/desktop tauri dev
 
 Open the demo website, sign in with any demo name, click **Connect desktop agent**. The link opens the app (in a built `.app`; in `tauri dev` paste the link or code via *Connect a website*). Approve the request, choose a project folder and an agent ("Test agent" works without any AI account), then send a prompt from the website. Try the prompts `permission` and `slow` to see local permission prompts and cancellation.
 
-Real agents: in **AI Providers**, click *Install connector* for Codex (pinned `@agentclientprotocol/codex-acp` 2.5.0) and sign in with ChatGPT or an API key; for Claude Code add an Anthropic API key (subscription sign-in is not allowed for website use — see `docs/provider-compliance.md`).
+Real agents: in **AI Providers**, click *Install connector* (pinned official ACP adapters: codex-acp 2.5.0, claude-agent-acp 0.100.0) and sign in with the official flow (`codex login` / `claude auth login`). No API keys are used.
 
 ## Website integration
 

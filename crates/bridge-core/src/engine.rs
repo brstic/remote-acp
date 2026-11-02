@@ -327,7 +327,7 @@ impl Bridge {
     pub async fn provider_sign_in(&self, provider: &str) -> BResult<()> {
         match provider {
             "codex" => providers::codex_sign_in().await.map_err(BridgeError::User),
-            "claude" => user("Claude subscription sign-in can't be used for website connections. Add an Anthropic API key instead."),
+            "claude" => providers::claude_sign_in().await.map_err(BridgeError::User),
             _ => user("This provider has no sign-in"),
         }
     }
@@ -335,41 +335,12 @@ impl Bridge {
     pub async fn provider_sign_out(&self, provider: &str) -> BResult<()> {
         let r = match provider {
             "codex" => providers::codex_sign_out().await.map_err(BridgeError::User),
-            "claude" => self
-                .inner
-                .cfg
-                .secrets
-                .delete("provider:claude:api_key")
-                .map_err(|e| BridgeError::Internal(e.to_string())),
+            "claude" => providers::claude_sign_out().await.map_err(BridgeError::User),
             _ => user("This provider has no sign-out"),
         };
         self.close_sessions_for_provider(provider).await;
         self.refresh_providers().await;
         r
-    }
-
-    pub async fn set_api_key(&self, provider: &str, key: &str) -> BResult<()> {
-        let key = key.trim();
-        if key.len() < 20 || key.contains(char::is_whitespace) {
-            return user("That doesn't look like a valid API key");
-        }
-        match provider {
-            "claude" => {
-                if !key.starts_with("sk-ant-") {
-                    return user("Anthropic API keys start with sk-ant-");
-                }
-                self.inner
-                    .cfg
-                    .secrets
-                    .set("provider:claude:api_key", key)
-                    .map_err(|e| BridgeError::Internal(e.to_string()))?;
-            }
-            "codex" => providers::codex_sign_in_api_key(key).await.map_err(BridgeError::User)?,
-            _ => return user("This provider does not use API keys"),
-        }
-        self.close_sessions_for_provider(provider).await;
-        self.refresh_providers().await;
-        Ok(())
     }
 
     pub async fn add_custom_agent(&self, name: &str, program: &str, args: Vec<String>) -> BResult<()> {
