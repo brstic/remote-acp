@@ -8,7 +8,7 @@ Untrusted: the website and its prompts, the relay/network, agent and tool output
 Implemented controls:
 - **Outbound-only desktop.** No listening sockets. `http://` only for localhost relays.
 - **Service authentication.** `Bearer <serviceId>.<secret>`; secrets stored as SHA-256, compared in constant time.
-- **Desktop authentication.** Per-desktop random token in the OS keychain.
+- **Desktop authentication.** Per-desktop random token stored in an owner-only (0600) file in the app data folder (same model as `~/.codex` / `~/.claude`); the OS keychain is not used, so unsigned rebuilds don't trigger authorization prompts.
 - **Pairing.** 256-bit single-use tickets (or 50-bit codes, rate limited to 5 failures/min/desktop), 30–600 s TTL, bound to the first desktop that redeems them. Service identity on the consent screen comes from the relay registry, never from the link. Unverified services get a red warning.
 - **Consent.** Explicit approval per connection with folder, access level, duration. Per-task approval on by default. Sensitive tool actions prompt locally; the website can only observe. "Allow for this task" is only offered for read/edit/search/fetch kinds.
 - **Tenant isolation.** A service can only see its own pairings, connections and tasks; tasks must name the same external user the desktop consented to (404 otherwise).

@@ -250,11 +250,7 @@ pub fn run() {
             let handle = app.handle().clone();
             let data_dir = app.path().app_data_dir().unwrap_or_else(|_| bridge_core::default_data_dir());
             let exe = std::env::current_exe().expect("current exe");
-            let secrets: Arc<dyn bridge_core::secrets::SecretStore> = Arc::from(bridge_core::secrets::default_store(if cfg!(debug_assertions) {
-                    "com.remoteacp.bridge.dev"
-                } else {
-                    "com.remoteacp.bridge"
-                }));
+            let secrets: Arc<dyn bridge_core::secrets::SecretStore> = Arc::new(bridge_core::secrets::FileStore::new(data_dir.join("secrets.json")));
             let bridge = tauri::async_runtime::block_on(Bridge::start(BridgeConfig {
                 data_dir,
                 default_relay_url: std::env::var("REMOTE_ACP_RELAY_URL").unwrap_or_else(|_| DEFAULT_RELAY_URL.into()),
