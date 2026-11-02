@@ -3,5 +3,14 @@ name = "connection-policy"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Workspace confinement and connection grant authorization"
 
 [dependencies]
+bridge-protocol = { path = "../bridge-protocol" }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+dirs = "6"
+
+[dev-dependencies]
+tempfile = "3"

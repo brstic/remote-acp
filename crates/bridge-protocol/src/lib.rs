@@ -643,3 +643,80 @@ mod tests {
         assert!(n >= 4);
     }
 }
+
+/// Opaque identifier and secret helpers shared by relay and desktop.
+pub mod ids {
+    use base64::Engine;
+    use sha2::{Digest, Sha256};
+
+    /// URL-safe random token with `bytes` bytes of OS entropy.
+    pub fn random_token(bytes: usize) -> String {
+        let mut buf = vec![0u8; bytes];
+        getrandom::fill(&mut buf).expect("OS random source unavailable");
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(buf)
+    }
+
+    /// Prefixed opaque id, e.g. `conn_3k9...`.
+    pub fn new_id(prefix: &str) -> String {
+        let mut buf = [0u8; 12];
+        getrandom::fill(&mut buf).expect("OS random source unavailable");
+        format!("{prefix}_{}", hex::encode(buf))
+    }
+
+    /// Human-enterable pairing code (Crockford base32, 10 chars, ~50 bits),
+    /// formatted as `XXXXX-XXXXX`.
+    pub fn pairing_code() -> String {
+        const ALPHABET: &[u8] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+        let mut buf = [0u8; 10];
+        getrandom::fill(&mut buf).expect("OS random source unavailable");
+        let chars: String = buf.iter().map(|b| ALPHABET[(*b as usize) % 32] as char).collect();
+        format!("{}-{}", &chars[..5], &chars[5..])
+    }
+
+    pub fn normalize_code(input: &str) -> String {
+        let c: String = input
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .map(|c| c.to_ascii_uppercase())
+            .map(|c| match c {
+                'O' => '0',
+                'I' | 'L' => '1',
+                c => c,
+            })
+            .collect();
+        if c.len() == 10 {
+            format!("{}-{}", &c[..5], &c[5..])
+        } else {
+            c
+        }
+    }
+
+    pub fn sha256_hex(input: &str) -> String {
+        hex::encode(Sha256::digest(input.as_bytes()))
+    }
+
+    /// Constant-time comparison of a presented secret against a stored hash.
+    pub fn verify_secret(presented: &str, stored_sha256_hex: &str) -> bool {
+        use subtle::ConstantTimeEq;
+        let h = sha256_hex(presented);
+        h.as_bytes().ct_eq(stored_sha256_hex.as_bytes()).into()
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        #[test]
+        fn tokens_and_codes() {
+            let a = random_token(32);
+            assert_eq!(a.len(), 43);
+            assert_ne!(a, random_token(32));
+            assert!(new_id("conn").starts_with("conn_"));
+            let code = pairing_code();
+            assert_eq!(code.len(), 11);
+            assert_eq!(normalize_code(&code.to_lowercase().replace('-', " ")), code);
+            let h = sha256_hex("secret");
+            assert!(verify_secret("secret", &h));
+            assert!(!verify_secret("Secret", &h));
+        }
+    }
+}

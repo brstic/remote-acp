@@ -3,5 +3,26 @@ name = "e2e-tests"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 
 [dependencies]
+agent-host = { path = "../../crates/agent-host" }
+bridge-core = { path = "../../crates/bridge-core" }
+bridge-protocol = { path = "../../crates/bridge-protocol" }
+remote-acp-relay = { path = "../../apps/relay" }
+connection-policy = { path = "../../crates/connection-policy" }
+tokio = { version = "1", features = ["full"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+futures = "0.3"
+tempfile = "3"
+axum = "0.8"
+anyhow = "1"
+
+[[bin]]
+name = "mock-acp-agent"
+path = "src/bin/mock-acp-agent.rs"
+
+[[bin]]
+name = "e2e-desktop"
+path = "src/bin/e2e-desktop.rs"
