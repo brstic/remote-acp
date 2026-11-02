@@ -1,0 +1,30 @@
+[package]
+name = "remote-acp-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Remote ACP Bridge desktop application"
+
+[lib]
+name = "remote_acp_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-deep-link = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+tauri-plugin-notification = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-autostart = "2"
+bridge-core = { path = "../../../crates/bridge-core" }
+agent-host = { path = "../../../crates/agent-host" }
+connection-policy = { path = "../../../crates/connection-policy" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

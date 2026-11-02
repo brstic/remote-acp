@@ -7,8 +7,9 @@ members = [
   "crates/bridge-core",
   "apps/relay",
   "tests/e2e",
+  "apps/desktop/src-tauri",
 ]
-exclude = ["apps/desktop/src-tauri"]
+
 
 [workspace.package]
 version = "0.1.0"
