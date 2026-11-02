@@ -288,6 +288,8 @@ pub async fn install_adapter(adapters_dir: &Path, provider: &str) -> Result<Stri
     let dir = adapter_dir(adapters_dir, pin);
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    // npm resolves symlinks (e.g. macOS /var -> /private/var); give it the canonical path.
+    let dir = dir.canonicalize().map_err(|e| e.to_string())?;
     std::fs::write(dir.join("package.json"), r#"{"name":"remote-acp-adapter","private":true}"#).map_err(|e| e.to_string())?;
     let spec = format!("{}@{}", pin.package, pin.version);
     let dir_s = dir.to_string_lossy().to_string();
@@ -307,10 +309,17 @@ pub async fn install_adapter(adapters_dir: &Path, provider: &str) -> Result<Stri
     )
     .map_err(|e| e.to_string())?;
     let key = format!("node_modules/{}", pin.package);
-    let integrity = lock.pointer(&format!("/packages/{}/integrity", key.replace('/', "~1"))).and_then(|v| v.as_str());
+    let integrity = lock["packages"]
+        .as_object()
+        .and_then(|m| m.iter().find(|(k, _)| *k == &key || k.ends_with(&format!("/{key}"))))
+        .and_then(|(_, v)| v["integrity"].as_str());
     if integrity != Some(pin.integrity) {
         let _ = std::fs::remove_dir_all(&dir);
-        return Err("Downloaded adapter does not match the verified package; installation aborted".into());
+        tracing::warn!(?integrity, lockfile_version = ?lock.get("lockfileVersion"), "adapter integrity mismatch");
+        return Err(format!(
+            "Downloaded adapter does not match the verified package; installation aborted (got {})",
+            integrity.unwrap_or("nothing")
+        ));
     }
     let entry = adapter_entry(adapters_dir, pin);
     let hash = sha256_file(&entry).ok_or("adapter entry missing after install")?;
