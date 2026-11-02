@@ -160,25 +160,22 @@ impl Workspace {
         let parent = dunce_canonicalize(parent).map_err(|_| PathDenied::NotFound)?;
         self.check_inside(&parent)?;
         let target = parent.join(file_name);
-        match std::fs::symlink_metadata(&target) {
-            Ok(meta) => {
-                if meta.file_type().is_symlink() {
-                    let resolved = dunce_canonicalize(&target).map_err(|_| PathDenied::OutsideWorkspace)?;
-                    self.check_inside(&resolved)?;
-                    let rmeta = std::fs::metadata(&resolved).map_err(|_| PathDenied::NotFound)?;
-                    if !rmeta.is_file() || link_count(&rmeta) > 1 {
-                        return Err(PathDenied::HardLink);
-                    }
-                    return Ok(resolved);
-                }
-                if !meta.is_file() {
-                    return Err(PathDenied::NotAFile);
-                }
-                if link_count(&meta) > 1 {
+        if let Ok(meta) = std::fs::symlink_metadata(&target) {
+            if meta.file_type().is_symlink() {
+                let resolved = dunce_canonicalize(&target).map_err(|_| PathDenied::OutsideWorkspace)?;
+                self.check_inside(&resolved)?;
+                let rmeta = std::fs::metadata(&resolved).map_err(|_| PathDenied::NotFound)?;
+                if !rmeta.is_file() || link_count(&rmeta) > 1 {
                     return Err(PathDenied::HardLink);
                 }
+                return Ok(resolved);
             }
-            Err(_) => {}
+            if !meta.is_file() {
+                return Err(PathDenied::NotAFile);
+            }
+            if link_count(&meta) > 1 {
+                return Err(PathDenied::HardLink);
+            }
         }
         self.check_inside(&target)?;
         Ok(target)

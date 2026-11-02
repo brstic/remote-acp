@@ -494,11 +494,10 @@ impl Envelope {
                     return Err(ValidationError::InvalidField("text"));
                 }
             }
-            Body::Error(e) | Body::TaskRejected(e) | Body::TaskFailed(e) => {
-                if e.code.len() > MAX_ID_LEN || e.message.len() > 4096 {
+            Body::Error(e) | Body::TaskRejected(e) | Body::TaskFailed(e)
+                if (e.code.len() > MAX_ID_LEN || e.message.len() > 4096) => {
                     return Err(ValidationError::InvalidField("error"));
                 }
-            }
             _ => {}
         }
         Ok(())
