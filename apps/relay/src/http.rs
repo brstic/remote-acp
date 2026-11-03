@@ -441,8 +441,10 @@ async fn revoke_connection(State(st): State<Shared>, headers: HeaderMap, Path(id
 
 // ---------- tasks ----------
 
+/// Unknown fields are rejected so a client never silently loses semantics
+/// (e.g. `instructions`/`tools` sent to a relay that doesn't support them).
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct CreateTask {
     connection_id: String,
     external_user_id: String,

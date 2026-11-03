@@ -51,6 +51,11 @@ _Last updated: 2026-11-02_
 
 - CI green on macOS, Windows and Linux (Rust workspace tests incl. E2E) and the web job (all TS packages, examples, Node E2E). CI found and we fixed a Windows-only firewall gap (verbatim `\\?\` / UNC paths) and Windows-specific test assumptions.
 
+- Example apps with REAL agents (`tests/node-e2e/test/examples-real.test.ts`, `REAL_AGENTS=codex,claude`): all three examples pass with Codex and with Claude Code: minimal answer, architecture review with website instructions, and README written after a real local permission prompt. This found a firewall false positive (agents reading their own skill folders), now fixed.
+- Shipped release `.app` verified headlessly (launched in the background, no window focus): website tasks through the real relay produce the answer, apply website instructions, block an outside-folder read (`policy_blocked`), and reconnect automatically after a relay restart.
+- Real-agent instructions tests: `instructions_only_{claude,codex}`, `instructions_after_plain_task_claude` pass. `site_tools_claude`: 20 consecutive passes after diagnostics were added (2 unexplained early failures).
+- Relay rejects unknown `POST /v1/tasks` fields (422), so new options are never silently dropped by an older relay.
+
 ## Not done yet / known limitations
 - GUI E2E is a scripted manual-run procedure (macOS only), not part of CI.
 - Two installed copies of the app (e.g. debug + release bundles) both register `remoteacp://`; macOS may hand the link to the non-running copy, whose single-instance hand-off drops the URL. Keep one installed copy (see troubleshooting).

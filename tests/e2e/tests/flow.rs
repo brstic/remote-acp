@@ -621,3 +621,13 @@ fn tool_urls_must_be_on_the_site_domain() {
     assert!(ok("http://localhost:3000/mcp", "http://localhost:3000"));
     assert!(!ok("https://evil.example/mcp", "http://localhost:3000"));
 }
+
+#[tokio::test]
+async fn relay_rejects_unknown_task_fields() {
+    let (_r, d, svc) = setup().await;
+    let conn = d.pair(&svc, "u", false).await;
+    let (s, _) = svc
+        .post("/v1/tasks", json!({"connectionId": conn, "externalUserId": "u", "prompt": "hi", "idempotencyKey": "k-unknown", "systemPromptV9": "x"}))
+        .await;
+    assert_eq!(s, 422, "unknown fields must not be silently ignored");
+}

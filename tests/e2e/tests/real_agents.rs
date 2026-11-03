@@ -495,3 +495,81 @@ async fn site_tools_codex() {
 async fn site_tools_claude() {
     site_tools_probe("claude").await;
 }
+
+async fn instructions_only_probe(provider: &str) -> String {
+    let relay = start_relay().await;
+    let d = start_desktop_with(&relay.url, PathBuf::from(env!("CARGO_BIN_EXE_mock-acp-agent"))).await;
+    d.bridge.install_adapter(provider).await.unwrap();
+    let svc = Service::new(&relay.url, SVC_A, SECRET_A);
+    let p = svc.create_pairing("dev").await;
+    let req = d.bridge.begin_pairing(p["url"].as_str().unwrap()).await.unwrap();
+    let g = d
+        .bridge
+        .accept_pairing(&req.pairing_id, bridge_core::AcceptOptions {
+            provider_id: provider.into(), workspace: d.workspace_path(), access: AccessLevel::ReadOnly,
+            require_task_approval: false, duration_secs: 3600, acknowledge_terms: true,
+        })
+        .await
+        .unwrap();
+    let (_, t) = svc
+        .post("/v1/tasks", serde_json::json!({
+            "connectionId": g.connection_id, "externalUserId": "dev",
+            "prompt": "Say hello in one short sentence.",
+            "instructions": "You are the Acme Notes assistant. Always finish every reply with the exact token ACME-DONE on its own line.",
+            "idempotencyKey": bridge_protocol::ids::new_id("k"),
+        }))
+        .await;
+    let ev = svc.events(t["taskId"].as_str().unwrap(), None).await;
+    let text = text_of(&ev);
+    println!("[{provider}] instructions-only reply: {text:?}");
+    text
+}
+
+#[tokio::test]
+#[ignore]
+async fn instructions_only_claude() {
+    assert!(instructions_only_probe("claude").await.contains("ACME-DONE"));
+}
+
+#[tokio::test]
+#[ignore]
+async fn instructions_only_codex() {
+    assert!(instructions_only_probe("codex").await.contains("ACME-DONE"));
+}
+
+/// Same connection: a plain task first, then tasks with instructions (the
+/// session must restart with the new system prompt).
+#[tokio::test]
+#[ignore]
+async fn instructions_after_plain_task_claude() {
+    let provider = "claude";
+    let relay = start_relay().await;
+    let d = start_desktop_with(&relay.url, PathBuf::from(env!("CARGO_BIN_EXE_mock-acp-agent"))).await;
+    std::fs::write(d.workspace.path().join("notes.txt"), "hello\n").unwrap();
+    d.bridge.install_adapter(provider).await.unwrap();
+    let svc = Service::new(&relay.url, SVC_A, SECRET_A);
+    let p = svc.create_pairing("dev").await;
+    let req = d.bridge.begin_pairing(p["url"].as_str().unwrap()).await.unwrap();
+    let g = d.bridge.accept_pairing(&req.pairing_id, bridge_core::AcceptOptions {
+        provider_id: provider.into(), workspace: d.workspace_path(), access: AccessLevel::ReadOnly,
+        require_task_approval: false, duration_secs: 3600, acknowledge_terms: true,
+    }).await.unwrap();
+    let mut out = vec![];
+    for (prompt, instr) in [
+        ("Reply with exactly OK.", None),
+        ("What is in notes.txt?", Some("Always finish every reply with the exact token ACME-DONE on its own line.")),
+        ("What is in notes.txt?", Some("Always finish every reply with the exact token ACME-DONE on its own line.")),
+    ] {
+        let mut body = serde_json::json!({"connectionId": g.connection_id, "externalUserId": "dev", "prompt": prompt, "idempotencyKey": bridge_protocol::ids::new_id("k")});
+        if let Some(i) = instr { body["instructions"] = serde_json::json!(i); }
+        let (_, t) = svc.post("/v1/tasks", body).await;
+        let ev = svc.events(t["taskId"].as_str().unwrap(), None).await;
+        let text = text_of(&ev);
+        let local = d.bridge.snapshot().tasks.into_iter().find(|x| x.id == t["taskId"].as_str().unwrap()).unwrap();
+        let local_text: String = local.transcript.iter().filter_map(|i| match i { bridge_core::TranscriptItem::Agent { text } => Some(text.clone()), _ => None }).collect();
+        println!("[claude] website={text:?}\n         local={local_text:?}");
+        out.push((text, local_text));
+    }
+    assert!(out[1].0.contains("ACME-DONE") || out[1].1.contains("ACME-DONE"));
+    assert_eq!(out[1].0, out[1].1, "website text differs from the desktop transcript");
+}
