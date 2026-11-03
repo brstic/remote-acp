@@ -31,3 +31,43 @@ jobs:
         with: { node-version: 22 }
       - run: pnpm --dir apps/desktop install --ignore-workspace && pnpm --dir apps/desktop test
       - run: pnpm install && pnpm -r --filter '!remote-acp-desktop' build && pnpm -r --filter '!remote-acp-desktop' test
+  desktop-ui:
+    name: desktop UI (WebDriver, ${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux deps (Tauri + WebKit WebDriver)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev webkit2gtk-driver xvfb dbus-x11
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: pnpm --dir apps/desktop install --ignore-workspace && pnpm --dir apps/desktop build
+      - run: cargo install tauri-driver --locked
+      - name: Matching Edge WebDriver (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: cargo install --git https://github.com/chippers/msedgedriver-tool && msedgedriver-tool.exe && ls msedgedriver.exe
+      - name: Build the app with the bundled UI
+        run: cargo build -p remote-acp-relay -p remote-acp-desktop --features tauri/custom-protocol
+      - name: Click through the real app UI (Linux)
+        if: runner.os == 'Linux'
+        env: { REMOTE_ACP_RELAY_URL: "http://127.0.0.1:8798" }
+        run: |
+          xvfb-run -a dbus-run-session -- bash -c '
+            tauri-driver > tauri-driver.log 2>&1 &
+            sleep 3
+            node tests/desktop-webdriver/run.mjs "$PWD/target/debug/remote-acp-desktop" "$PWD/target/debug/remote-acp-relay"'
+      - name: Click through the real app UI (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        env: { REMOTE_ACP_RELAY_URL: "http://127.0.0.1:8798" }
+        run: |
+          tauri-driver --native-driver "$PWD/msedgedriver.exe" > tauri-driver.log 2>&1 &
+          sleep 3
+          node tests/desktop-webdriver/run.mjs "$(cygpath -w "$PWD/target/debug/remote-acp-desktop.exe")" "$PWD/target/debug/remote-acp-relay.exe"
