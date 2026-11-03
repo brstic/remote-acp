@@ -10,6 +10,7 @@ This is the flagship example. It uses every integration feature: pairing with sc
 `instructions`, website `tools` (an MCP server on the site's own domain), live streaming, cancel,
 error handling and run history.
 
+<p align="center"><img src="docs/bugboard-demo.gif" alt="Real run: Claude Code fixes BUG-101 and reports back through Bugboard's tools" width="100%" /></p>
 <p align="center"><img src="docs/bugboard-issue.png" alt="Bugboard issue page after a real Claude Code run: status In review, live agent run panel" width="100%" /></p>
 <p align="center"><img src="docs/bugboard-agent-report.png" alt="The agent's comment posted through Bugboard's MCP tool, next to the live step timeline" width="80%" /><br/>
 <sub>Real run (not staged): Claude Code fixed BUG-101 in the sample project, ran the tests (10/10), posted this comment through Bugboard's <code>add_comment</code> tool and moved the issue to <i>In review</i>. Every tool call was approved on the desktop.</sub></p>

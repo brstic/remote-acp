@@ -24,6 +24,8 @@ Remote ACP Bridge is a desktop app plus a small relay and a web SDK. A website c
 watches the agent work live. You approve what it may do. Nothing runs on your machine without your
 consent, and no AI credentials ever leave it.
 
+<p align="center"><img src="docs/assets/bugboard-demo.gif" alt="Demo: an issue tracker sends a bug to the user's own Claude Code, which fixes it locally and reports back through the site's tools" width="100%" /><br/><sub><b>Real run, not staged:</b> the Bugboard example sends a bug to the user's own Claude Code. The agent fixes it on the user's computer, runs the tests, and moves the issue to <i>In review</i> through the site's own MCP tools. Every action is approved in the desktop app.</sub></p>
+
 <p align="center"><img src="docs/assets/activity-chat.png" alt="Activity: a website's task running on Claude Code with plan, tool steps, a permission and a formatted answer" width="100%" /><br/><sub><b>Activity</b>: a website's task running on the user's Claude Code, with the site's own instructions and tools, the plan, tool steps, a local permission and a formatted answer.</sub></p>
 
 <table>
