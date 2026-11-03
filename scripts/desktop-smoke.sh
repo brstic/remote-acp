@@ -7,9 +7,12 @@ EXE=target/debug/remote-acp-desktop
 RELAY=target/debug/remote-acp-relay
 if [[ "${OS:-}" == "Windows_NT" ]]; then EXE="$EXE.exe"; RELAY="$RELAY.exe"; fi
 WORK=$(mktemp -d)
+# Native path for the relay's database (Git Bash /tmp paths mean nothing to Windows programs).
+NATIVE_WORK="$WORK"
+if command -v cygpath >/dev/null 2>&1; then NATIVE_WORK=$(cygpath -m "$WORK"); fi
 HASH=$("$RELAY" hash-secret smoke-secret-0123456789)
 cat > "$WORK/relay.json" <<JSON
-{"listen":"127.0.0.1:8799","publicUrl":"http://127.0.0.1:8799","database":"$(echo "$WORK/relay.sqlite3" | sed 's#\\#/#g')",
+{"listen":"127.0.0.1:8799","publicUrl":"http://127.0.0.1:8799","database":"$NATIVE_WORK/relay.sqlite3",
  "services":[{"id":"svc_smoke","displayName":"Smoke","origin":"http://localhost:3000","secretSha256":"$HASH","verification":"operator"}]}
 JSON
 "$RELAY" --config "$WORK/relay.json" > "$WORK/relay.log" 2>&1 &
