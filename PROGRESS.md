@@ -49,11 +49,13 @@ _Last updated: 2026-11-02_
 - Three example apps (`minimal-integration`, `code-review-assistant`, `docs-generator`) with real end-to-end tests; integration guide.
 - Suites: Rust 59 passed (+10 real-agent, all passing), TypeScript 100 passed, desktop UI 25 passed. `site_tools_claude` failed intermittently (2 of ~18 runs, empty reply, not reproduced since; diagnostics added to the test).
 
+- CI green on macOS, Windows and Linux (Rust workspace tests incl. E2E) and the web job (all TS packages, examples, Node E2E). CI found and we fixed a Windows-only firewall gap (verbatim `\\?\` / UNC paths) and Windows-specific test assumptions.
+
 ## Not done yet / known limitations
 - GUI E2E is a scripted manual-run procedure (macOS only), not part of CI.
 - Two installed copies of the app (e.g. debug + release bundles) both register `remoteacp://`; macOS may hand the link to the non-running copy, whose single-instance hand-off drops the URL. Keep one installed copy (see troubleshooting).
 - Signing/notarization: wired in `release.yml` (activates with `APPLE_*` secrets); not performed — no Developer ID on this machine. No auto-update.
-- Windows: all Rust crates except the Tauri shell `cargo check` clean for `x86_64-pc-windows-gnu`; app not run on a real Windows machine. Linux: not run (no Linux host/containers here; CI matrix builds and tests it).
+- Windows/Linux: all Rust and TS test suites pass in CI; the desktop app itself was not launched on a real Windows or Linux machine.
 - No hosted relay is running yet: a deployable kit exists (`deploy/relay`: Docker + Caddy automatic TLS); it needs a server and a domain.
 - No E2EE (TLS + no persistence on relay only).
 - Next.js demo from the plan replaced by a framework-free Node demo.

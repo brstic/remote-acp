@@ -6,6 +6,7 @@
 
 **Use the AI coding agent on your own computer from websites you trust,<br/>while sign-in, files, permissions and execution stay on your machine.**
 
+[![CI](https://github.com/brstic/remote-acp/actions/workflows/ci.yml/badge.svg)](https://github.com/brstic/remote-acp/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 ![Platforms](https://img.shields.io/badge/desktop-macOS%20·%20Windows%20·%20Linux-informational)
 ![Agent Client Protocol](https://img.shields.io/badge/protocol-ACP%20v1-8A2BE2)
@@ -222,8 +223,8 @@ If you are an AI agent working in this repository, start here:
 
 ## Status
 
-Working on macOS (tested end to end with real Codex and Claude Code). Windows and Linux builds are set
-up in CI. Not done yet: code signing and notarization, auto-update, end-to-end encryption, a hosted
+Working on macOS, tested end to end with real Codex and Claude Code. The full Rust and TypeScript test
+suites pass in CI on macOS, Windows and Linux. The desktop app has been run on macOS only. Not done yet: code signing and notarization, auto-update, end-to-end encryption, a hosted
 public relay. See [PROGRESS.md](PROGRESS.md).
 
 ## License
