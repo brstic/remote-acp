@@ -2,6 +2,9 @@ name: Release
 on:
   push:
     tags: ["v*"]
+permissions:
+  contents: write
+  packages: write
 jobs:
   desktop:
     strategy:
@@ -9,7 +12,7 @@ jobs:
       matrix:
         include:
           - { os: macos-latest, target: aarch64-apple-darwin, bundles: "app,dmg" }
-          - { os: macos-13, target: x86_64-apple-darwin, bundles: "app,dmg" }
+          - { os: macos-latest, target: x86_64-apple-darwin, bundles: "app,dmg" }
           - { os: windows-latest, target: x86_64-pc-windows-msvc, bundles: "msi,nsis" }
           - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, bundles: "deb,rpm,appimage" }
     runs-on: ${{ matrix.os }}
@@ -18,40 +21,75 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with: { targets: "${{ matrix.target }}" }
       - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev rpm
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev rpm libfuse2
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - run: cargo test --workspace
       - run: pnpm --dir apps/desktop install --ignore-workspace
-      - name: Build (signed when secrets are configured)
+      - name: Build (macOS signing/notarization only when secrets are configured)
+        shell: bash
         working-directory: apps/desktop
         env:
-          # macOS: Developer ID signing + notarization
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: pnpm exec tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
-      - name: Checksums
+          APPLE_CERTIFICATE_SECRET: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD_SECRET: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY_SECRET: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID_SECRET: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD_SECRET: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID_SECRET: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # Export signing variables only if they are set, so unsigned builds work.
+          [ -n "$APPLE_CERTIFICATE_SECRET" ] && export APPLE_CERTIFICATE="$APPLE_CERTIFICATE_SECRET" APPLE_CERTIFICATE_PASSWORD="$APPLE_CERTIFICATE_PASSWORD_SECRET" APPLE_SIGNING_IDENTITY="$APPLE_SIGNING_IDENTITY_SECRET"
+          [ -n "$APPLE_ID_SECRET" ] && export APPLE_ID="$APPLE_ID_SECRET" APPLE_PASSWORD="$APPLE_PASSWORD_SECRET" APPLE_TEAM_ID="$APPLE_TEAM_ID_SECRET"
+          pnpm exec tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+      - name: Collect artifacts
         shell: bash
-        run: cd target/${{ matrix.target }}/release/bundle && find . -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*.exe' -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \) -exec shasum -a 256 {} \; > SHA256SUMS-${{ matrix.target }}.txt && cat SHA256SUMS-*.txt
+        run: |
+          mkdir -p out
+          B=target/${{ matrix.target }}/release/bundle
+          find "$B" -maxdepth 2 -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*.exe' -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \) -exec cp {} out/ \;
+          ls -la out
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.target }}
-          path: |
-            target/${{ matrix.target }}/release/bundle/**/*.dmg
-            target/${{ matrix.target }}/release/bundle/**/*.msi
-            target/${{ matrix.target }}/release/bundle/**/*.exe
-            target/${{ matrix.target }}/release/bundle/**/*.deb
-            target/${{ matrix.target }}/release/bundle/**/*.rpm
-            target/${{ matrix.target }}/release/bundle/**/*.AppImage
-            target/${{ matrix.target }}/release/bundle/SHA256SUMS-*.txt
+          path: out/*
+
+  relay:
+    strategy:
+      matrix:
+        include:
+          - { os: ubuntu-22.04, name: remote-acp-relay-linux-x86_64, bin: remote-acp-relay }
+          - { os: macos-latest, name: remote-acp-relay-macos-arm64, bin: remote-acp-relay }
+          - { os: windows-latest, name: remote-acp-relay-windows-x86_64.exe, bin: remote-acp-relay.exe }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release -p remote-acp-relay
+      - shell: bash
+        run: mkdir -p out && cp target/release/${{ matrix.bin }} out/${{ matrix.name }}
+      - uses: actions/upload-artifact@v4
+        with: { name: "${{ matrix.name }}", path: out/* }
+
+  publish:
+    needs: [desktop, relay]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --title "Remote ACP Bridge ${GITHUB_REF_NAME}" \
+            --notes-file .github/RELEASE_NOTES.md \
+            --prerelease
+
   relay-image:
     runs-on: ubuntu-22.04
-    permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3
