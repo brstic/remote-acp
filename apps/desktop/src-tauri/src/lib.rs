@@ -224,6 +224,31 @@ fn build_tray_menu(app: &AppHandle, pause_label: &str) -> tauri::Result<Menu<tau
     Menu::with_items(app, &[&open, &pause, &quit])
 }
 
+/// The main window is created in code (not tauri.conf.json) so debug builds
+/// can expose WebView2 remote debugging for automated UI tests when
+/// `REMOTE_ACP_WEBDRIVER_PORT` is set. Release builds never do.
+fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
+    let builder = tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
+        .title("Remote ACP Bridge")
+        .inner_size(1080.0, 720.0)
+        .min_inner_size(900.0, 600.0)
+        .max_inner_size(1600.0, 1200.0);
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true)
+        .traffic_light_position(tauri::LogicalPosition::new(18.0, 22.0));
+    #[cfg(windows)]
+    let builder = match std::env::var("REMOTE_ACP_WEBDRIVER_PORT") {
+        Ok(port) if cfg!(debug_assertions) && port.chars().all(|c| c.is_ascii_digit()) => builder.additional_browser_args(&format!(
+            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-port={port}"
+        )),
+        _ => builder,
+    };
+    builder.build()?;
+    Ok(())
+}
+
 pub fn run() {
     // When launched as `--acp-mock-agent`, act as the built-in test ACP agent.
     if std::env::args().nth(1).as_deref() == Some("--acp-mock-agent") {
@@ -247,6 +272,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
         .setup(|app| {
+            create_main_window(app.handle())?;
             let handle = app.handle().clone();
             let data_dir = app.path().app_data_dir().unwrap_or_else(|_| bridge_core::default_data_dir());
             let exe = std::env::current_exe().expect("current exe");

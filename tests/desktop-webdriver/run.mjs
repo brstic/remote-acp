@@ -94,7 +94,7 @@ try {
     // Windows: start the app ourselves with WebView2 remote debugging and attach
     // msedgedriver to it (more reliable than letting the driver launch it).
     step("launch the desktop app (WebView2 debugging) and attach msedgedriver");
-    app = spawn(APP, [], { stdio: "ignore", env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: "--remote-debugging-port=9222" } });
+    app = spawn(APP, [], { stdio: "ignore", env: { ...process.env, REMOTE_ACP_WEBDRIVER_PORT: "9222" } });
     let ok = false;
     for (let i = 0; i < 120 && !ok; i++) {
       ok = !!(await fetch("http://127.0.0.1:9222/json/version").catch(() => null))?.ok;
