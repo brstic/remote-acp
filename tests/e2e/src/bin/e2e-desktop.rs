@@ -13,6 +13,8 @@ async fn main() {
     let workspace = std::env::var("WORKSPACE").expect("WORKSPACE");
     let mock = std::env::var("MOCK_AGENT").expect("MOCK_AGENT");
     let permission = std::env::var("PERMISSION_CHOICE").unwrap_or_else(|_| "allow_once".into());
+    // "mock" (default) or a real provider: "codex" / "claude" (uses the developer's own sign-in).
+    let provider = std::env::var("PROVIDER").unwrap_or_else(|_| "mock".into());
     let data = tempfile::tempdir().unwrap();
     let bridge = Bridge::start(BridgeConfig {
         data_dir: data.path().into(),
@@ -24,6 +26,15 @@ async fn main() {
     })
     .await
     .unwrap();
+    if provider != "mock" {
+        if let Err(e) = bridge.install_adapter(&provider).await {
+            println!("{}", serde_json::json!({"event": "error", "message": format!("install {provider}: {e}")}));
+        }
+        let ready = bridge.providers().into_iter().any(|p| p.id == provider && p.state == bridge_core::providers::ProviderState::Ready);
+        if !ready {
+            println!("{}", serde_json::json!({"event": "error", "message": format!("provider {provider} is not ready")}));
+        }
+    }
     let mut ui = bridge.subscribe();
     let b2 = bridge.clone();
     tokio::spawn(async move {
@@ -41,6 +52,21 @@ async fn main() {
             }
         }
     });
+    // Report new local diagnostics (e.g. firewall decisions) for test debugging.
+    {
+        let b3 = bridge.clone();
+        tokio::spawn(async move {
+            let mut seen = 0usize;
+            loop {
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                let errs = b3.diagnostics().await.recent_errors;
+                for e in errs.iter().skip(seen) {
+                    eprintln!("[diag] {e}");
+                }
+                seen = errs.len();
+            }
+        });
+    }
     println!("{}", serde_json::json!({"event": "ready"}));
     let mut lines = tokio::io::BufReader::new(tokio::io::stdin()).lines();
     while let Ok(Some(line)) = lines.next_line().await {
@@ -50,12 +76,12 @@ async fn main() {
             Ok(req) => {
                 let g = bridge
                     .accept_pairing(&req.pairing_id, AcceptOptions {
-                        provider_id: "mock".into(),
+                        provider_id: provider.clone(),
                         workspace: workspace.clone(),
                         access: Default::default(),
                         require_task_approval: true,
                         duration_secs: 3600,
-                        acknowledge_terms: false,
+                        acknowledge_terms: true,
                     })
                     .await;
                 match g {

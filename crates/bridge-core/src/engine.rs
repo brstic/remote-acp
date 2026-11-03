@@ -1429,7 +1429,10 @@ impl Bridge {
                         crate::guard::json_strings(v, &mut texts);
                     }
                     texts.extend(f.locations.iter().map(|l| l.path.clone()));
-                    let hits = crate::guard::paths_outside(&texts, workspace);
+                    // Agent skill folders may be read by any non-mutating tool (agents often
+                    // read them through shell commands); edits there stay blocked.
+                    let read_only = !matches!(f.kind.as_deref(), Some("edit" | "delete" | "move"));
+                    let hits = crate::guard::paths_outside_opts(&texts, workspace, read_only);
                     if let Some(p) = hits.first() {
                         self.block_task(task_id, format!("the agent tried to access {} outside the project folder", redact(p, None)));
                         return true;
@@ -1820,7 +1823,8 @@ impl Bridge {
         if remote {
             let mut texts: Vec<String> = req.tool_call.title.iter().cloned().collect();
             crate::guard::json_strings(&req.raw_tool_call, &mut texts);
-            if let Some(p) = crate::guard::paths_outside(&texts, workspace).first() {
+            let read_only = !matches!(kind.as_str(), "edit" | "delete" | "move");
+            if let Some(p) = crate::guard::paths_outside_opts(&texts, workspace, read_only).first() {
                 let reason = format!("Denied automatically: access to {} outside the project folder", redact(p, None));
                 self.push_item(&task_id, TranscriptItem::Notice { text: reason.clone() });
                 let conn = self.with_task(&task_id, |t| t.view.connection_id.clone()).flatten();

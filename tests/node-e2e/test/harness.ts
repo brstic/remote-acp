@@ -214,9 +214,9 @@ export async function startRelay(opts: { services?: RelayServiceEntry[] } = {}):
  */
 export async function startDesktop(
   relayUrl: string,
-  opts: { permissionChoice?: "allow_once" | "allow_task" | "deny" } = {},
+  opts: { permissionChoice?: "allow_once" | "allow_task" | "deny"; provider?: "mock" | "codex" | "claude"; workspace?: string } = {},
 ): Promise<{ proc: Proc; workspace: string }> {
-  const workspace = tmp("remoteacp-ws-");
+  const workspace = opts.workspace ?? tmp("remoteacp-ws-");
   const child = spawn(DESKTOP_BIN, [], {
     cwd: workspace,
     stdio: ["pipe", "pipe", "pipe"],
@@ -226,11 +226,12 @@ export async function startDesktop(
       WORKSPACE: workspace,
       MOCK_AGENT: MOCK_AGENT_BIN,
       PERMISSION_CHOICE: opts.permissionChoice ?? "allow_once",
+      PROVIDER: opts.provider ?? "mock",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },
   });
   const proc = new Proc(child, "desktop");
-  await proc.waitJson((v) => v.event === "ready", 20_000);
+  await proc.waitJson((v) => v.event === "ready", opts.provider && opts.provider !== "mock" ? 180_000 : 20_000);
   return { proc, workspace };
 }
 

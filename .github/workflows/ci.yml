@@ -12,12 +12,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Linux deps (Tauri)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev xvfb dbus-x11
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: pnpm --dir apps/desktop install --ignore-workspace && pnpm --dir apps/desktop build
       - run: cargo test --workspace
+      - name: Launch the desktop app (smoke test)
+        shell: bash
+        run: cargo build -p remote-acp-desktop -p remote-acp-relay && ./scripts/desktop-smoke.sh
   web:
     runs-on: ubuntu-22.04
     steps:

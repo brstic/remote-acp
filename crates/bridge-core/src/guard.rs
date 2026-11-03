@@ -69,9 +69,30 @@ fn resolve(p: &Path) -> PathBuf {
 const SENSITIVE_ROOTS: &[&str] = &["/etc", "/private", "/var", "/Users", "/Volumes", "/root", "/home", "/tmp", "/mnt", "/media", "/srv", "/opt/homebrew/etc"];
 const ALLOWED_EXACT: &[&str] = &["/dev/null", "/dev/stdout", "/dev/stderr", "/dev/stdin", "/dev/tty"];
 
+/// Folders where agents keep their own skills (instructions/resources the
+/// user installed for the agent). Reading them is part of normal agent
+/// behaviour; credential files (`~/.codex/auth.json`, `~/.claude/*.json`)
+/// are *not* inside these folders and stay blocked.
+fn is_agent_resource(resolved: &Path, home: Option<&Path>) -> bool {
+    let Some(home) = home else { return false };
+    let Ok(rel) = resolved.strip_prefix(home) else { return false };
+    let parts: Vec<String> = rel.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect();
+    match parts.as_slice() {
+        [a, b, _, ..] if (a == ".agents" || a == ".codex" || a == ".claude") && b == "skills" => true,
+        [a, b, rest @ ..] if a == ".claude" && b == "plugins" => rest.iter().any(|p| p == "skills"),
+        _ => false,
+    }
+}
+
 /// Paths mentioned in `texts` that point outside `workspace` into a
 /// sensitive area (home folders, system config, temp, other volumes).
 pub fn paths_outside(texts: &[String], workspace: &Path) -> Vec<String> {
+    paths_outside_opts(texts, workspace, false)
+}
+
+/// Like [`paths_outside`]; with `read_only_access` set, reads of the agent's
+/// own skill folders are not reported.
+pub fn paths_outside_opts(texts: &[String], workspace: &Path, read_only_access: bool) -> Vec<String> {
     let home = dirs::home_dir().map(|h| resolve(&h));
     let ws = resolve(workspace);
     let mut hits = vec![];
@@ -109,6 +130,9 @@ pub fn paths_outside(texts: &[String], workspace: &Path) -> Vec<String> {
             }
             let r = resolve(&c);
             if r.starts_with(&ws) {
+                continue;
+            }
+            if read_only_access && is_agent_resource(&r, home.as_deref()) {
                 continue;
             }
             // Relative escapes out of the workspace are always suspicious.
@@ -193,6 +217,24 @@ mod tests {
         let inside = w.canonicalize().unwrap().join("a.txt");
         std::fs::write(&inside, "x").unwrap();
         assert!(t(&format!("Read file '{}'", inside.display())).is_empty());
+    }
+
+    #[test]
+    fn agent_skill_folders_are_readable_but_credentials_are_not() {
+        let ws = tempfile::tempdir().unwrap();
+        let home = dirs::home_dir().unwrap();
+        let skill = home.join(".agents/skills/synced/x/doc-coauthoring/SKILL.md");
+        let codex_skill = home.join(".codex/skills/review/SKILL.md");
+        let plugin_skill = home.join(".claude/plugins/p/skills/s/SKILL.md");
+        for p in [&skill, &codex_skill, &plugin_skill] {
+            let t = vec![format!("Read {}", p.display())];
+            assert!(paths_outside_opts(&t, ws.path(), true).is_empty(), "{}", p.display());
+            assert!(!paths_outside_opts(&t, ws.path(), false).is_empty(), "writes must still be blocked: {}", p.display());
+        }
+        for p in [home.join(".codex/auth.json"), home.join(".claude/.credentials.json"), home.join(".ssh/id_rsa"), home.join(".agents/secrets.txt")] {
+            let t = vec![format!("Read {}", p.display())];
+            assert!(!paths_outside_opts(&t, ws.path(), true).is_empty(), "{}", p.display());
+        }
     }
 
     #[test]
