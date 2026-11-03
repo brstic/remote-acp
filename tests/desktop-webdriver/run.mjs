@@ -83,15 +83,31 @@ async function attr(xpath, name) {
 }
 
 let failed = false;
+let app;
 try {
   for (let i = 0; i < 50; i++) {
     if ((await fetch(`${RELAY}/healthz`).catch(() => null))?.ok) break;
     await sleep(200);
   }
-  step("launch the desktop app through tauri-driver");
   if (!existsSync(APP)) throw new Error(`app binary missing: ${APP}`);
-  const session = await wd("POST", "/session", { capabilities: { alwaysMatch: { "tauri:options": { application: APP } } } });
-  sid = session.sessionId;
+  if (process.env.ATTACH_WEBVIEW2) {
+    // Windows: start the app ourselves with WebView2 remote debugging and attach
+    // msedgedriver to it (more reliable than letting the driver launch it).
+    step("launch the desktop app (WebView2 debugging) and attach msedgedriver");
+    app = spawn(APP, [], { stdio: "ignore", env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: "--remote-debugging-port=9222" } });
+    let ok = false;
+    for (let i = 0; i < 120 && !ok; i++) {
+      ok = !!(await fetch("http://127.0.0.1:9222/json/version").catch(() => null))?.ok;
+      if (!ok) await sleep(500);
+    }
+    if (!ok) throw new Error("WebView2 debugging port never opened");
+    const session = await wd("POST", "/session", { capabilities: { alwaysMatch: { browserName: "MicrosoftEdge", "ms:edgeOptions": { debuggerAddress: "127.0.0.1:9222" } } } });
+    sid = session.sessionId;
+  } else {
+    step("launch the desktop app through tauri-driver");
+    const session = await wd("POST", "/session", { capabilities: { alwaysMatch: { "tauri:options": { application: APP } } } });
+    sid = session.sessionId;
+  }
 
   step("onboarding screen → Continue");
   await waitText("Connect your AI agent to websites securely.");
@@ -181,5 +197,6 @@ try {
 } finally {
   if (sid) await wd("DELETE", `/session/${sid}`).catch(() => {});
   relay.kill();
+  if (app) app.kill();
   process.exit(failed ? 1 : 0);
 }

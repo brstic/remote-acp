@@ -66,8 +66,8 @@ jobs:
       - name: Click through the real app UI (Windows)
         if: runner.os == 'Windows'
         shell: bash
-        env: { REMOTE_ACP_RELAY_URL: "http://127.0.0.1:8798" }
+        env: { REMOTE_ACP_RELAY_URL: "http://127.0.0.1:8798", ATTACH_WEBVIEW2: "1" }
         run: |
-          tauri-driver --native-driver "$PWD/msedgedriver.exe" > tauri-driver.log 2>&1 &
+          ./msedgedriver.exe --port=4444 > tauri-driver.log 2>&1 &
           sleep 3
           node tests/desktop-webdriver/run.mjs "$(cygpath -w "$PWD/target/debug/remote-acp-desktop.exe")" "$PWD/target/debug/remote-acp-relay.exe" || { echo "--- tauri-driver log"; tail -80 tauri-driver.log; exit 1; }
