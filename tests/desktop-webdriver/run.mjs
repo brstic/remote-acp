@@ -55,7 +55,10 @@ async function find(xpath, timeout = 20000) {
   while (Date.now() < end) {
     try {
       const v = await wd("POST", `/session/${sid}/element`, { using: "xpath", value: xpath });
-      return v[ELEMENT];
+      // W3C key, legacy JSONWP key, or whatever single key the driver used.
+      const id = v?.[ELEMENT] ?? v?.ELEMENT ?? (v && Object.values(v)[0]);
+      if (!id) throw new Error(`no element id in ${JSON.stringify(v)}`);
+      return id;
     } catch (e) {
       last = e;
       await sleep(250);
