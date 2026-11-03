@@ -348,7 +348,10 @@ mod tests {
         std::fs::write(&f, "hi").unwrap();
         assert!(w.resolve_read(&f).is_ok());
         assert_eq!(w.resolve_read("relative.txt"), Err(PathDenied::NotAbsolute));
+        #[cfg(unix)]
         assert_eq!(w.resolve_read("/etc/hosts"), Err(PathDenied::OutsideWorkspace));
+        #[cfg(windows)]
+        assert_eq!(w.resolve_read(r"C:\Windows\win.ini"), Err(PathDenied::OutsideWorkspace));
         let traversal = d.path().join("..").join("..").join("etc").join("hosts");
         assert!(w.resolve_read(&traversal).is_err());
     }
