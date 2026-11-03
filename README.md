@@ -47,16 +47,16 @@ consent, and no AI credentials ever leave it.
 
 ```mermaid
 flowchart LR
-    subgraph Web["Your website"]
-        B[Browser] -->|your API| S[Backend<br/>@remote-acp/web-sdk]
+    subgraph web["Your website"]
+        browser["Browser"] -->|"your own API"| backend["Backend with the web SDK"]
     end
-    S -->|HTTPS + SSE| R[(Relay<br/>routing only)]
-    D -->|outbound WSS| R
-    subgraph PC["User's computer"]
-        D[Remote ACP Bridge app<br/>consent · policy · firewall]
-        D -->|ACP v1 over stdio| C[codex-acp → Codex]
-        D -->|ACP v1 over stdio| K[claude-agent-acp → Claude Code]
+    backend -->|"HTTPS and SSE"| relay[("Relay: routing only")]
+    subgraph pc["User's computer"]
+        app["Remote ACP Bridge app: consent, policy, firewall"]
+        app -->|"ACP v1 over stdio"| codex["codex-acp and Codex"]
+        app -->|"ACP v1 over stdio"| claude["claude-agent-acp and Claude Code"]
     end
+    app -->|"outbound WSS"| relay
 ```
 
 1. **Pair.** The website shows *Connect desktop agent* (a one-time `remoteacp://` link or a 10-character code). The app shows the relay-verified site identity. The user picks an agent, a project folder and an access level, then clicks **Allow connection**.
