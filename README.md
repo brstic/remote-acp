@@ -123,10 +123,19 @@ for await (const ev of bridge.streamEvents(task.taskId)) {
 
 📘 **[Integration guide](docs/integration-guide.md)**: registration, pairing UI, SSE proxying, permission UX, error codes, a security checklist, and Express and Next.js recipes.
 
+### Real-world example: "Fix with my agent"
+
+<p align="center"><img src="docs/assets/bugboard-issue.png" alt="Bugboard: a bug fixed by the user's own Claude Code through Remote ACP Bridge" width="100%" /></p>
+
+An issue tracker sends a bug to the user's **own** agent. The agent fixes the code **on the user's computer**,
+runs the tests, and reports back through the tracker's own MCP tools. The tracker pays nothing for inference,
+never sees the repository, and never touches an AI credential. See [`examples/issue-tracker`](examples/issue-tracker).
+
 ### Example apps
 
 | Example | What it shows |
 |---|---|
+| [`examples/issue-tracker`](examples/issue-tracker) ⭐ | **Real-world flagship ("Bugboard"):** "Fix with my agent" on a bug. The user's own Codex or Claude Code fixes it locally, runs the tests, then comments and moves the issue to *In review* through the site's own MCP tools. Includes a sample project with a real bug and a real-agent test |
 | [`examples/minimal-integration`](examples/minimal-integration) | The smallest complete integration, commented to be read top to bottom |
 | [`examples/code-review-assistant`](examples/code-review-assistant) | A real product: structured review prompts, a live report, plan checklist and tool timeline |
 | [`examples/docs-generator`](examples/docs-generator) | Tasks that write files: local permission prompts, outcomes, error handling, disconnect |

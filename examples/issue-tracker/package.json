@@ -1,0 +1,25 @@
+{
+  "name": "@remote-acp/example-issue-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "EXAMPLE: Bugboard, a team issue tracker where each bug has \"Fix with my agent\". The user's own desktop agent fixes the bug locally and reports back through the site's own MCP tools.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/main.js",
+    "dev": "pnpm --filter @remote-acp/example-issue-tracker... build && REMOTE_ACP_SERVICE_SECRET=${REMOTE_ACP_SERVICE_SECRET:-dev-only-bugboard-secret-0123456789abcdef} node dist/main.js",
+    "relay": "cargo run --manifest-path ../../Cargo.toml -p remote-acp-relay -- --config relay.dev.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@remote-acp/browser-helper": "workspace:*",
+    "@remote-acp/web-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "typescript": "5.6.3",
+    "vitest": "2.1.8"
+  }
+}

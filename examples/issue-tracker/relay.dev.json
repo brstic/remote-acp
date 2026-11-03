@@ -1,0 +1,14 @@
+{
+  "listen": "127.0.0.1:8787",
+  "publicUrl": "http://127.0.0.1:8787",
+  "database": "relay.dev.sqlite3",
+  "services": [
+    {
+      "id": "svc_bugboard",
+      "displayName": "Bugboard (example)",
+      "origin": "http://localhost:3104",
+      "secretSha256": "fa0f5d55a4e81f3095530f0dfa078706a67ad79d29bbf838db919faec33f1fca",
+      "verification": "operator"
+    }
+  ]
+}

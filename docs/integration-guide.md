@@ -5,6 +5,7 @@ Codex or Claude Code on their own computer. Your site sends them tasks and shows
 agent runs locally, under the user's own sign-in, inside a project folder they choose.
 
 > Working examples to copy from:
+> - `examples/issue-tracker` ("Bugboard"): the real-world flagship. "Fix with my agent" sends a bug to the user's own agent with site instructions and site MCP tools; the agent fixes it locally and comments back
 > - `examples/minimal-integration`: the smallest complete integration, written to be read top to bottom
 > - `examples/code-review-assistant`: a real product flow (structured prompts, streamed report, plan, tool timeline)
 > - `examples/docs-generator`: tasks that write files, local permission prompts, error handling and disconnecting

@@ -15,6 +15,11 @@ async fn main() {
     let permission = std::env::var("PERMISSION_CHOICE").unwrap_or_else(|_| "allow_once".into());
     // "mock" (default) or a real provider: "codex" / "claude" (uses the developer's own sign-in).
     let provider = std::env::var("PROVIDER").unwrap_or_else(|_| "mock".into());
+    // "read_only" (default) or "workspace_write" (the consent screen's "Can edit").
+    let access = match std::env::var("ACCESS").as_deref() {
+        Ok("workspace_write") => connection_policy::AccessLevel::WorkspaceWrite,
+        _ => connection_policy::AccessLevel::ReadOnly,
+    };
     let data = tempfile::tempdir().unwrap();
     let bridge = Bridge::start(BridgeConfig {
         data_dir: data.path().into(),
@@ -78,7 +83,7 @@ async fn main() {
                     .accept_pairing(&req.pairing_id, AcceptOptions {
                         provider_id: provider.clone(),
                         workspace: workspace.clone(),
-                        access: Default::default(),
+                        access,
                         require_task_approval: true,
                         duration_secs: 3600,
                         acknowledge_terms: true,

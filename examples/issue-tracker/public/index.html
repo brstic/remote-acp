@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>Bugboard (Example)</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <p class="banner" role="note">
+      <strong>EXAMPLE</strong> · Bugboard shows a Remote ACP Bridge integration. Sign-in is a demo and all data lives in server memory. Local
+      development only.
+    </p>
+
+    <header class="topbar">
+      <a class="brand" href="#/issues" aria-label="Bugboard home">
+        <span class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M9 3.5a1 1 0 0 1 1.7-.7L12 4.1l1.3-1.3A1 1 0 1 1 14.7 4.2l-1 1A5 5 0 0 1 17 9h1.5a1 1 0 1 1 0 2H17v1.5h2a1 1 0 1 1 0 2h-2.1a5 5 0 0 1-.6 1.7l1.4 1.4a1 1 0 0 1-1.4 1.4l-1.3-1.3A5 5 0 0 1 13 19.4V12a1 1 0 1 0-2 0v7.4a5 5 0 0 1-2-1.7L7.7 19a1 1 0 0 1-1.4-1.4l1.4-1.4a5 5 0 0 1-.6-1.7H5a1 1 0 1 1 0-2h2V11H5.5a1 1 0 1 1 0-2H7a5 5 0 0 1 3.3-3.8l-1-1A1 1 0 0 1 9 3.5Z"/></svg>
+        </span>
+        <span>Bugboard</span>
+        <span class="badge">EXAMPLE</span>
+      </a>
+      <nav class="crumbs" id="crumbs" aria-label="Breadcrumb" hidden></nav>
+      <div class="top-actions">
+        <button class="conn-chip" id="conn-chip" type="button" hidden aria-controls="conn-card"></button>
+        <button class="icon-btn" id="theme" type="button" aria-label="Switch theme" title="Switch theme">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z"/></svg>
+        </button>
+        <div class="userbox" id="userbox" hidden>
+          <span class="avatar" id="avatar" aria-hidden="true"></span>
+          <span class="username" id="username"></span>
+          <button class="btn btn-ghost btn-sm" id="logout" type="button">Sign out</button>
+        </div>
+      </div>
+    </header>
+
+    <main id="main">
+      <!-- Sign in -->
+      <section class="card signin" id="signin" hidden>
+        <div class="signin-hero">
+          <h1>Fix bugs with the agent you already have</h1>
+          <p class="muted">
+            Bugboard is a team issue tracker. On any issue, click <strong>Fix with my agent</strong>: your own Codex or Claude Code fixes it in
+            the project folder on your computer and reports back here. Bugboard never sees your code or your AI account.
+          </p>
+        </div>
+        <form id="login-form" class="signin-form">
+          <label class="field-label" for="login-name">Your name <span class="muted">(demo sign-in, no password)</span></label>
+          <div class="row">
+            <input id="login-name" placeholder="e.g. alice" autocomplete="off" maxlength="24" />
+            <button class="btn btn-primary" type="submit">Continue</button>
+          </div>
+          <div class="quick" id="quick-names" aria-label="Quick demo users">
+            <span class="muted small">Quick pick:</span>
+            <button class="chip" type="button" data-name="alice">alice</button>
+            <button class="chip" type="button" data-name="bob">bob</button>
+          </div>
+          <p class="error" id="login-error" role="alert" hidden></p>
+          <p class="muted small">Each demo user gets their own copy of the <code>acme-web</code> project, so you won't see anyone else's runs.</p>
+        </form>
+      </section>
+
+      <!-- Signed in -->
+      <div class="layout" id="app" hidden>
+        <aside class="sidebar">
+          <section class="card project-card">
+            <div class="project-head">
+              <span class="project-icon" aria-hidden="true">AW</span>
+              <div>
+                <div class="project-name" id="project-name">acme-web</div>
+                <div class="muted small" id="project-desc"></div>
+              </div>
+            </div>
+            <nav class="sidenav" aria-label="Project">
+              <a href="#/issues" class="active">Issues <span class="count" id="nav-count"></span></a>
+            </nav>
+          </section>
+
+          <section class="card" id="conn-card" aria-labelledby="conn-title">
+            <h2 id="conn-title">Your desktop agent</h2>
+            <div id="conn-body" aria-live="polite"></div>
+          </section>
+
+          <section class="card how small">
+            <h2>How it works</h2>
+            <ol>
+              <li>Connect Remote ACP Bridge once and pick the project folder (choose <em>Can edit</em> so the agent can apply its fix).</li>
+              <li>Open an issue and click <strong>Fix with my agent</strong>. Approve the task in the desktop app.</li>
+              <li>The agent works locally, then comments and moves the issue to <em>In review</em> through Bugboard's tools.</li>
+            </ol>
+          </section>
+        </aside>
+
+        <section class="content" id="content">
+          <!-- Issue list -->
+          <div id="view-list" hidden>
+            <div class="list-head">
+              <div>
+                <h1>Issues</h1>
+                <p class="muted small" id="list-sub"></p>
+              </div>
+              <div class="filters" role="tablist" id="filters" aria-label="Filter by status">
+                <button role="tab" type="button" data-filter="active" aria-selected="true">Active</button>
+                <button role="tab" type="button" data-filter="all" aria-selected="false">All</button>
+                <button role="tab" type="button" data-filter="open" aria-selected="false">Open</button>
+                <button role="tab" type="button" data-filter="in_progress" aria-selected="false">In progress</button>
+                <button role="tab" type="button" data-filter="in_review" aria-selected="false">In review</button>
+                <button role="tab" type="button" data-filter="done" aria-selected="false">Done</button>
+              </div>
+            </div>
+            <div class="card issue-list-card">
+              <ul class="issue-list" id="issue-list" aria-live="polite"></ul>
+              <p class="empty muted" id="list-empty" hidden>No issues match this filter.</p>
+            </div>
+          </div>
+
+          <!-- Issue detail -->
+          <div id="view-issue" hidden>
+            <a class="back" href="#/issues">&larr; All issues</a>
+            <div class="issue-head">
+              <div class="issue-title-wrap">
+                <h1 id="issue-title"></h1>
+                <div class="issue-meta">
+                  <span class="status-pill" id="issue-status"></span>
+                  <span class="muted small" id="issue-byline"></span>
+                </div>
+              </div>
+              <div class="issue-head-actions">
+                <label class="sr-only" for="status-select">Change status</label>
+                <select id="status-select">
+                  <option value="open">Open</option>
+                  <option value="in_progress">In progress</option>
+                  <option value="in_review">In review</option>
+                  <option value="done">Done</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="issue-grid">
+              <div class="issue-main">
+                <article class="card issue-body" id="issue-body"></article>
+
+                <section class="card" aria-labelledby="activity-title">
+                  <h2 id="activity-title">Activity</h2>
+                  <ol class="comments" id="comments" aria-live="polite"></ol>
+                  <form class="comment-form" id="comment-form">
+                    <label class="sr-only" for="comment-text">Add a comment</label>
+                    <textarea id="comment-text" rows="3" maxlength="8000" placeholder="Leave a comment… (Markdown-ish: **bold**, `code`, lists)"></textarea>
+                    <div class="row-end">
+                      <p class="error small" id="comment-error" role="alert" hidden></p>
+                      <button class="btn btn-secondary btn-sm" type="submit">Comment</button>
+                    </div>
+                  </form>
+                </section>
+              </div>
+
+              <aside class="issue-side">
+                <section class="card fix-card" aria-labelledby="fix-title">
+                  <h2 id="fix-title">Fix with my agent</h2>
+                  <p class="muted small">
+                    Runs on <strong>your</strong> computer with your own Codex or Claude Code, in the project folder you chose. Bugboard sends the
+                    issue and gets back a comment and a status, nothing else.
+                  </p>
+                  <button class="btn btn-primary btn-block" id="fix" type="button" disabled>Fix with my agent</button>
+                  <p class="hint muted small" id="fix-hint"></p>
+                  <div class="notice notice-err" id="fix-error" role="alert" hidden></div>
+                  <details class="disclosure">
+                    <summary>What the agent receives</summary>
+                    <ul class="small">
+                      <li><strong>Instructions</strong>: act as Bugboard's fixing assistant, make the minimal fix, add or run tests, report back.</li>
+                      <li><strong>Tools</strong>: <code>bugboard</code> MCP server on this site with <code>get_issue</code>, <code>list_comments</code>, <code>add_comment</code>, <code>set_status</code>.</li>
+                      <li>A token that only works for this issue, for this run, for at most 30 minutes.</li>
+                    </ul>
+                  </details>
+                </section>
+
+                <section class="card run-card" id="run-card" aria-labelledby="run-title" hidden>
+                  <div class="run-head">
+                    <h2 id="run-title">Agent run</h2>
+                    <button class="btn btn-ghost btn-sm" id="cancel" type="button" hidden>Cancel</button>
+                  </div>
+                  <div class="run-state" id="run-state" role="status"></div>
+                  <div class="notice" id="run-notice" hidden></div>
+
+                  <div class="run-section">
+                    <h3>Plan</h3>
+                    <ul class="plan" id="plan"></ul>
+                    <p class="muted small" id="plan-empty">No plan shared yet.</p>
+                  </div>
+                  <div class="run-section">
+                    <h3>Steps</h3>
+                    <ol class="timeline" id="timeline"></ol>
+                  </div>
+                  <div class="run-section">
+                    <h3>Agent output</h3>
+                    <div class="md output" id="output" aria-live="polite"></div>
+                  </div>
+                  <details class="disclosure">
+                    <summary>Prompt sent to your agent</summary>
+                    <pre id="prompt-text"></pre>
+                  </details>
+                </section>
+
+                <section class="card" aria-labelledby="runs-title">
+                  <h2 id="runs-title">Run history</h2>
+                  <ol class="run-history" id="run-history"></ol>
+                  <p class="muted small" id="run-history-empty">No agent runs for this issue yet.</p>
+                </section>
+              </aside>
+            </div>
+          </div>
+
+          <div id="view-missing" class="card empty-state" hidden>
+            <h1>Issue not found</h1>
+            <p class="muted"><a href="#/issues">Back to all issues</a></p>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="foot muted small">
+      Example app. Tasks are approved, and permission prompts answered, only in the Remote ACP Bridge desktop app. Bugboard can watch, never approve.
+    </footer>
+  </body>
+</html>

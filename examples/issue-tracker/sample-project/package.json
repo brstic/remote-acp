@@ -1,0 +1,12 @@
+{
+  "name": "acme-web",
+  "version": "1.4.2",
+  "private": true,
+  "description": "Acme storefront helpers (sample project for the Bugboard example).",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "Apache-2.0"
+}
