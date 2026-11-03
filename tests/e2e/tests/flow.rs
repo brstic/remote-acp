@@ -321,7 +321,9 @@ async fn workspace_confinement_and_redaction() {
     let raw = serde_json::to_string(&ev).unwrap();
     assert!(!raw.contains(&inside.parent().unwrap().to_string_lossy().to_string()), "{raw}");
 
-    for target in ["/etc/hosts".to_string(), format!("{}/.ssh/id_rsa", std::env::var("HOME").unwrap())] {
+    let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).unwrap();
+    let system_file = if cfg!(windows) { r"C:\Windows\win.ini".to_string() } else { "/etc/hosts".to_string() };
+    for target in [system_file, format!("{home}/.ssh/id_rsa")] {
         let (_, t) = svc.start_task(&conn, "u", &format!("read {target}")).await;
         let ev = svc.events(t["taskId"].as_str().unwrap(), None).await;
         // Blocked by the output firewall before (or by fs confinement at) the read.

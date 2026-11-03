@@ -77,15 +77,28 @@ pub fn paths_outside(texts: &[String], workspace: &Path) -> Vec<String> {
     let mut hits = vec![];
     for text in texts {
         for t in tokens(text) {
-            let candidate: Option<PathBuf> = if let Some(rest) = t.strip_prefix("~/") {
+            // Windows verbatim (`\\?\C:\...`) and device (`\\.\`) prefixes.
+            let t_raw = t;
+            let t = t.strip_prefix(r"\\?\UNC\").map(|r| r.to_string()).map(|r| format!(r"\\{r}"));
+            let t = t.as_deref().unwrap_or(t_raw);
+            let t = t.strip_prefix(r"\\?\").or_else(|| t.strip_prefix(r"\\.\")).unwrap_or(t);
+            let is_drive = t.len() > 2 && t.as_bytes()[0].is_ascii_alphabetic() && t.as_bytes()[1] == b':' && (t.as_bytes()[2] == b'\\' || t.as_bytes()[2] == b'/');
+            let rel_escape = |t: &str| {
+                t == ".." || t.starts_with("../") || t.starts_with("..\\") || t.contains("/../") || t.contains("\\..\\") || t.contains("\\../") || t.contains("/..\\")
+            };
+            let candidate: Option<PathBuf> = if let Some(rest) = t.strip_prefix("~/").or_else(|| t.strip_prefix("~\\")) {
                 home.as_ref().map(|h| h.join(rest))
-            } else if t == "~" || t == "$HOME" || t.starts_with("$HOME/") {
-                home.as_ref().map(|h| h.join(t.trim_start_matches("$HOME").trim_start_matches('/')))
-            } else if t.starts_with('/') {
+            } else if t == "~" || t == "$HOME" || t.starts_with("$HOME/") || t.starts_with("%USERPROFILE%") {
+                home.as_ref().map(|h| h.join(t.trim_start_matches("$HOME").trim_start_matches("%USERPROFILE%").trim_start_matches(['/', '\\'])))
+            } else if t.starts_with(r"\\") {
+                // UNC share: always outside the workspace and treated as sensitive.
+                if !hits.contains(&t_raw.to_string()) {
+                    hits.push(t_raw.to_string());
+                }
+                continue;
+            } else if t.starts_with('/') || is_drive {
                 Some(PathBuf::from(t))
-            } else if t.len() > 2 && t.as_bytes()[1] == b':' && (t.as_bytes()[2] == b'\\' || t.as_bytes()[2] == b'/') {
-                Some(PathBuf::from(t))
-            } else if t.starts_with("../") || t.contains("/../") || t == ".." {
+            } else if rel_escape(t) {
                 Some(ws.join(t))
             } else {
                 None
@@ -99,12 +112,12 @@ pub fn paths_outside(texts: &[String], workspace: &Path) -> Vec<String> {
                 continue;
             }
             // Relative escapes out of the workspace are always suspicious.
-            let relative_escape = t.starts_with("../") || t.contains("/../") || t == "..";
+            let relative_escape = rel_escape(t);
             let sensitive = relative_escape || home.as_ref().map(|h| r.starts_with(h)).unwrap_or(false)
                 || SENSITIVE_ROOTS.iter().any(|root| r.starts_with(root))
                 || cfg!(windows);
-            if sensitive && !hits.contains(&t.to_string()) {
-                hits.push(t.to_string());
+            if sensitive && !hits.contains(&t_raw.to_string()) {
+                hits.push(t_raw.to_string());
             }
         }
     }
@@ -162,6 +175,24 @@ mod tests {
         // macOS: /var/folders/... and /private/var/folders/... are the same place.
         let ws_str = w.to_string_lossy().replace("/private/var/", "/var/");
         assert!(t(&format!("{ws_str}/a.txt")).is_empty(), "{ws_str}");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn detects_windows_paths() {
+        let ws = tempfile::tempdir().unwrap();
+        let w = ws.path();
+        let t = |s: &str| paths_outside(&[s.to_string()], w);
+        let outside = tempfile::tempdir().unwrap();
+        let decoy = outside.path().canonicalize().unwrap().join("decoy.txt"); // \\?\C:\...
+        assert!(!t(&format!("Read file '{}'", decoy.display())).is_empty(), "{}", decoy.display());
+        assert!(!t(r"type C:\Windows\win.ini").is_empty());
+        assert!(!t(r"dir \\fileserver\share").is_empty());
+        assert!(!t(r"type ~\.ssh\id_rsa").is_empty());
+        assert!(!t(r"type ..\..\secret.txt").is_empty());
+        let inside = w.canonicalize().unwrap().join("a.txt");
+        std::fs::write(&inside, "x").unwrap();
+        assert!(t(&format!("Read file '{}'", inside.display())).is_empty());
     }
 
     #[test]
