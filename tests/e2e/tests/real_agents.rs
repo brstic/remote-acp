@@ -377,3 +377,121 @@ async fn firewall_codex_through_bridge() {
 async fn firewall_claude_through_bridge() {
     firewall_probe("claude").await;
 }
+
+/// Minimal MCP server (Streamable HTTP, JSON responses) standing in for a
+/// website's own tool server. Requires `Authorization: Bearer site-token`.
+async fn start_mcp_server() -> (String, Arc<std::sync::atomic::AtomicUsize>) {
+    use axum::http::{HeaderMap, StatusCode};
+    use axum::response::IntoResponse;
+    use axum::routing::post;
+    use serde_json::{json, Value};
+    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let c2 = calls.clone();
+    let app = axum::Router::new().route(
+        "/mcp",
+        post(move |headers: HeaderMap, axum::Json(msg): axum::Json<Value>| {
+            let calls = c2.clone();
+            async move {
+                if headers.get("authorization").and_then(|v| v.to_str().ok()) != Some("Bearer site-token") {
+                    return (StatusCode::UNAUTHORIZED, "missing token").into_response();
+                }
+                let id = msg.get("id").cloned();
+                let method = msg.get("method").and_then(Value::as_str).unwrap_or("");
+                let result = match method {
+                    "initialize" => json!({
+                        "protocolVersion": msg.pointer("/params/protocolVersion").cloned().unwrap_or(json!("2025-03-26")),
+                        "capabilities": {"tools": {}},
+                        "serverInfo": {"name": "acme-site-tools", "version": "1.0.0"}
+                    }),
+                    "tools/list" => json!({"tools": [{
+                        "name": "lookup_secret_word",
+                        "description": "Returns today's secret word from the Acme website.",
+                        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false}
+                    }]}),
+                    "tools/call" => {
+                        calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        json!({"content": [{"type": "text", "text": "TANGERINE-88"}], "isError": false})
+                    }
+                    "ping" => json!({}),
+                    _ if id.is_none() => return StatusCode::ACCEPTED.into_response(),
+                    _ => return axum::Json(json!({"jsonrpc": "2.0", "id": id, "error": {"code": -32601, "message": "not found"}})).into_response(),
+                };
+                axum::Json(json!({"jsonrpc": "2.0", "id": id, "result": result})).into_response()
+            }
+        })
+        .get(|| async { StatusCode::METHOD_NOT_ALLOWED }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://localhost:{}/mcp", listener.local_addr().unwrap().port());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    (url, calls)
+}
+
+/// Website instructions (system prompt) + website MCP tools through the full
+/// product path with a real agent.
+async fn site_tools_probe(provider: &str) {
+    let (mcp_url, calls) = start_mcp_server().await;
+    let relay = start_relay().await;
+    let d = start_desktop_with(&relay.url, PathBuf::from(env!("CARGO_BIN_EXE_mock-acp-agent"))).await;
+    d.bridge.install_adapter(provider).await.unwrap();
+    let svc = Service::new(&relay.url, SVC_A, SECRET_A);
+    let (_, p) = svc.post("/v1/pairings", serde_json::json!({"externalUserId": "dev", "scopes": ["task.interactive", "agent.tools"]})).await;
+    let req = d.bridge.begin_pairing(p["url"].as_str().unwrap()).await.unwrap();
+    let g = d
+        .bridge
+        .accept_pairing(&req.pairing_id, bridge_core::AcceptOptions {
+            provider_id: provider.into(),
+            workspace: d.workspace_path(),
+            access: AccessLevel::ReadOnly,
+            require_task_approval: false,
+            duration_secs: 3600,
+            acknowledge_terms: true,
+        })
+        .await
+        .unwrap();
+    let mut ui = d.bridge.subscribe();
+    let b2 = d.bridge.clone();
+    let pname = provider.to_string();
+    let auto = tokio::spawn(async move {
+        while let Ok(ev) = ui.recv().await {
+            if let UiEvent::PermissionRequested { request_id, title, .. } = ev {
+                println!("[{pname}] permission prompt: {title} -> allow");
+                let _ = b2.respond_permission(&request_id, "allow_once");
+            }
+        }
+    });
+    let (s, t) = svc
+        .post("/v1/tasks", serde_json::json!({
+            "connectionId": g.connection_id, "externalUserId": "dev",
+            "prompt": "Call the lookup_secret_word tool and tell me the word.",
+            "instructions": "You are the Acme Notes assistant. Always finish every reply with the exact token ACME-DONE on its own line.",
+            "tools": [{"name": "acme", "url": mcp_url, "headers": [{"name": "Authorization", "value": "Bearer site-token"}]}],
+            "idempotencyKey": bridge_protocol::ids::new_id("k"),
+        }))
+        .await;
+    assert_eq!(s, 201, "{t}");
+    let ev = svc.events(t["taskId"].as_str().unwrap(), None).await;
+    let text = text_of(&ev);
+    println!("[{provider}] reply: {text:?} tool calls on site server: {}", calls.load(std::sync::atomic::Ordering::SeqCst));
+    println!("[{provider}] terminal: {:?}", terminal(&ev).map(|t| &t["payload"]));
+    auto.abort();
+    if calls.load(std::sync::atomic::Ordering::SeqCst) == 0 {
+        println!("[{provider}] EVENTS: {}", serde_json::to_string(&ev).unwrap());
+        println!("[{provider}] DIAG: {:?}", d.bridge.diagnostics().await.recent_errors);
+    }
+    assert!(calls.load(std::sync::atomic::Ordering::SeqCst) >= 1, "agent never called the website tool");
+    assert!(text.contains("TANGERINE-88"), "{text}");
+    assert!(text.contains("ACME-DONE"), "system prompt not applied: {text}");
+}
+
+#[tokio::test]
+#[ignore]
+async fn site_tools_codex() {
+    site_tools_probe("codex").await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn site_tools_claude() {
+    site_tools_probe("claude").await;
+}

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>Code Review Assistant (Example)</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <p class="banner" role="note">
+      <strong>EXAMPLE</strong> · Code Review Assistant shows a Remote ACP Bridge integration. Sign-in is fake and data lives in server memory —
+      local development only.
+    </p>
+
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">&#x2714;</span>
+        <span>Code Review Assistant</span>
+        <span class="badge">EXAMPLE</span>
+      </div>
+      <div class="userbox" id="userbox" hidden>
+        <span class="avatar" id="avatar" aria-hidden="true"></span>
+        <span id="username"></span>
+        <button class="btn btn-ghost btn-sm" id="logout" type="button">Sign out</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="card signin" id="signin" hidden>
+        <h1>Sign in <span class="muted">(example only)</span></h1>
+        <p class="muted">No password. The name only scopes your desktop connection and review history on this example server.</p>
+        <form id="login-form" class="row">
+          <label class="sr-only" for="login-name">Username</label>
+          <input id="login-name" placeholder="e.g. alice" autocomplete="off" maxlength="24" />
+          <button class="btn btn-primary" type="submit">Continue</button>
+        </form>
+        <p class="error" id="login-error" role="alert" hidden></p>
+      </section>
+
+      <div class="layout" id="app" hidden>
+        <aside class="sidebar">
+          <section class="card" aria-labelledby="conn-title">
+            <h2 id="conn-title">Desktop agent</h2>
+            <div id="conn-body" aria-live="polite"></div>
+          </section>
+
+          <section class="card" aria-labelledby="new-title">
+            <h2 id="new-title">New review</h2>
+            <form id="review-form">
+              <fieldset class="types" id="types">
+                <legend class="sr-only">Review type</legend>
+              </fieldset>
+              <label class="field-label" for="focus">Focus notes <span class="muted">(optional)</span></label>
+              <textarea id="focus" rows="3" maxlength="2000" placeholder="e.g. Pay extra attention to the payment webhook handler and the admin routes."></textarea>
+              <button class="btn btn-primary btn-block" id="run" type="submit" disabled>Run review on my computer</button>
+              <p class="hint muted small">
+                The review runs read-only in the project folder you chose in Remote ACP Bridge. Choose <em>Read only</em> access when you connect.
+              </p>
+              <p class="error" id="run-error" role="alert" hidden></p>
+            </form>
+          </section>
+
+          <section class="card" aria-labelledby="hist-title">
+            <h2 id="hist-title">This session</h2>
+            <ol class="history" id="history"></ol>
+            <p class="muted small" id="history-empty">No reviews yet.</p>
+          </section>
+        </aside>
+
+        <section class="card report" id="report" aria-labelledby="report-title">
+          <div class="report-empty" id="report-empty">
+            <h2>Reviews run on your machine</h2>
+            <p class="muted">
+              Pick a review type, optionally add focus notes and run it. Your own agent (Codex, Claude Code or the Test agent) reads your project
+              locally; this website only receives the report it streams back.
+            </p>
+          </div>
+
+          <div id="report-view" hidden>
+            <div class="report-head">
+              <div>
+                <h2 id="report-title"></h2>
+                <p class="muted small" id="report-meta"></p>
+              </div>
+              <div class="report-actions">
+                <span class="status" id="report-status"></span>
+                <button class="btn btn-ghost btn-sm" id="cancel" type="button" hidden>Cancel</button>
+                <button class="btn btn-secondary btn-sm" id="copy" type="button">Copy report</button>
+              </div>
+            </div>
+            <div class="notice" id="report-notice" role="status" hidden></div>
+
+            <div class="report-grid">
+              <article class="md" id="report-body" aria-live="polite"></article>
+              <div class="report-side">
+                <section>
+                  <h3>Agent plan</h3>
+                  <ul class="plan" id="plan"></ul>
+                  <p class="muted small" id="plan-empty">No plan shared yet.</p>
+                </section>
+                <section>
+                  <h3>Activity</h3>
+                  <ol class="timeline" id="timeline"></ol>
+                </section>
+              </div>
+            </div>
+
+            <details class="prompt">
+              <summary>Prompt sent to your agent</summary>
+              <pre id="prompt-text"></pre>
+            </details>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="foot muted small">
+      Example app. Tasks are approved, and permission prompts answered, only in the Remote ACP Bridge desktop app.
+    </footer>
+  </body>
+</html>

@@ -98,7 +98,9 @@ pub fn paths_outside(texts: &[String], workspace: &Path) -> Vec<String> {
             if r.starts_with(&ws) {
                 continue;
             }
-            let sensitive = home.as_ref().map(|h| r.starts_with(h)).unwrap_or(false)
+            // Relative escapes out of the workspace are always suspicious.
+            let relative_escape = t.starts_with("../") || t.contains("/../") || t == "..";
+            let sensitive = relative_escape || home.as_ref().map(|h| r.starts_with(h)).unwrap_or(false)
                 || SENSITIVE_ROOTS.iter().any(|root| r.starts_with(root))
                 || cfg!(windows);
             if sensitive && !hits.contains(&t.to_string()) {
@@ -149,6 +151,7 @@ mod tests {
         assert!(t(&format!("Read file '{}'", inside.display())).is_empty());
         assert!(t("cat notes.txt && ls src").is_empty());
         assert!(t("echo hi > /dev/null").is_empty());
+        #[cfg(not(windows))]
         assert!(t("/usr/bin/env python3 x.py").is_empty());
         assert_eq!(t("cat ~/.ssh/id_rsa"), vec!["~/.ssh/id_rsa"]);
         assert_eq!(t("Read /etc/passwd"), vec!["/etc/passwd"]);

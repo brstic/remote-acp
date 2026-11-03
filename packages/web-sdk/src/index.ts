@@ -16,6 +16,7 @@ export type {
   ConnectionStatus,
   CreatePairingRequest,
   CreatePairingResponse,
+  McpServer,
   PairingStatus,
   PairingStatusResponse,
   PermissionOutcome,

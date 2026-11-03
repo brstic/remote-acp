@@ -239,6 +239,45 @@ app.post("/api/remote-acp/tasks/:id/cancel", requireUser, async (req, res) => {
 Tasks on the same connection reuse the same agent session while the user is active, so follow-up
 prompts keep their context. The session closes after the user's idle timeout (15 minutes by default).
 
+### Your own system instructions and tools
+
+Websites can customize the agent per task:
+
+```ts
+await bridge.startTask({
+  connectionId, externalUserId: user.id,
+  prompt: "Which notes changed today?",
+  // Appended to the agent's own system prompt for the session (max 32 KiB).
+  instructions: "You are the Acme Notes assistant. Answer in two sentences. Never modify files.",
+  // Your tools, as MCP servers (Streamable HTTP) on YOUR verified domain. Max 8.
+  tools: [{
+    name: "acme",
+    url: "https://app.acme.com/mcp",
+    headers: [{ name: "Authorization", value: `Bearer ${shortLivedTokenFor(user)}` }],
+  }],
+});
+```
+
+- **Instructions** work with every connection. They are delivered through ACP's `systemPrompt`
+  (Codex and Claude Code both support it). Agents without that capability get them as a prefix of the
+  prompt. Changing them starts a fresh agent session.
+- **Tools** need the `agent.tools` scope. Request it when pairing:
+  `createPairing({ externalUserId, scopes: ["task.interactive", "agent.tools"] })`. The user sees
+  "Give the agent its own tools (MCP servers on your-domain)" before allowing the connection.
+  Without the scope, `startTask` fails with `missing_scope` (403).
+- Tool URLs must use `https` and be on your service's verified domain or a subdomain of it. Anything
+  else is rejected on the desktop with `tools_not_allowed`. This prevents a site from pointing the
+  agent at services on the user's machine or network. During local development, a `localhost`
+  service may use `localhost` tool servers.
+- Use **short-lived, per-user tokens** in `headers`. They are passed to the local agent so it can
+  call your server. Don't use long-lived secrets.
+- Tool calls show up as normal `tool_call` events (and may trigger local permission prompts).
+- The desktop shows your instructions and tool servers on the task, under *Customized by <your site>*.
+
+Your MCP server only needs `initialize`, `tools/list` and `tools/call` over JSON-RPC `POST`
+(Streamable HTTP, JSON responses are fine). `tests/e2e/tests/real_agents.rs` contains a
+~40-line example that both Codex and Claude Code use successfully.
+
 ---
 
 ## 7. UX guidelines
@@ -284,12 +323,12 @@ Authenticate with `Authorization: Bearer <serviceId>.<secret>`.
 
 | Method & path | Body / query | Returns |
 |---|---|---|
-| `POST /v1/pairings` | `{externalUserId, scopes?, expiresInSeconds? (30–600)}` | `{pairingId, url, code, expiresAt}` |
+| `POST /v1/pairings` | `{externalUserId, scopes? (task.interactive, agent.tools), expiresInSeconds? (30–600)}` | `{pairingId, url, code, expiresAt}` |
 | `GET /v1/pairings/{id}` | | `{status, connectionId?}` |
 | `GET /v1/connections?externalUserId=` | | `{connections:[…]}` |
 | `GET /v1/connections/{id}` | | `{status, online, provider, expiresAt, …}` |
 | `POST /v1/connections/{id}/revoke` | | `{ok}` |
-| `POST /v1/tasks` | `{connectionId, externalUserId, prompt, idempotencyKey}` | `201 {taskId, state}` (`200` on idempotent replay) |
+| `POST /v1/tasks` | `{connectionId, externalUserId, prompt, idempotencyKey, instructions?, tools?}` | `201 {taskId, state}` (`200` on idempotent replay) |
 | `GET /v1/tasks/{id}` | | `{state, stopReason?, error?}` |
 | `POST /v1/tasks/{id}/cancel` | | `{ok}` |
 | `GET /v1/tasks/{id}/events` | header `Last-Event-ID` | SSE: `id` = seq, `event` = kind, `data` = `{seq, kind, payload}` |
@@ -313,6 +352,9 @@ Errors always look like `{"error": {"code": "…", "message": "…"}}`.
 | `policy_blocked` | `task.failed` | The desktop's safety checks stopped the task (e.g. the agent touched files outside the project folder) | "The task was stopped by your computer's safety checks." |
 | `agent_crashed` / `agent_error` / `agent_timeout` | `task.failed` | The local agent failed | "The agent stopped unexpectedly. Try again." |
 | `idempotency_conflict` | `startTask` (409) | Same key, different body | Bug in your code. Generate a new key per new task. |
+| `missing_scope` | `startTask` (403) | `tools` sent without the `agent.tools` scope | Re-pair with `scopes: ["task.interactive", "agent.tools"]`. |
+| `tools_not_allowed` | `task.rejected` | A tool URL isn't on your verified domain | Host your MCP server on your domain (https). |
+| `tools_unsupported` | `task.failed` | The user's agent can't use MCP over HTTP | Run the task without tools. |
 | `rate_limited` | any (429) | Too many requests | Back off and retry. |
 | `unauthorized` / `not_found` | any | Wrong secret, or an object that doesn't belong to your service or user | Check configuration and ownership. |
 

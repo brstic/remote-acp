@@ -27,3 +27,10 @@ pnpm --filter @remote-acp/node-e2e test     # or: pnpm -r --filter '!remote-acp-
 
 `E2E_VERBOSE=1` prints child process output. All child processes are killed and temp dirs removed
 after the run.
+
+## Reused by the example apps
+
+`test/harness.ts` (relay with a custom service list via `startRelay({services})`, desktops with
+`startDesktop(url, {permissionChoice})`, `pairDesktop`, `startNodeServer`) and `test/app-client.ts`
+(cookie-keeping API client + SSE reader) are imported by the E2E tests in `examples/minimal-integration`,
+`examples/code-review-assistant` and `examples/docs-generator`.

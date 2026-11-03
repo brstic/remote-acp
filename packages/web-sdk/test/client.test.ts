@@ -133,6 +133,24 @@ describe("REST calls", () => {
     expect(body.idempotencyKey).toMatch(/^[0-9a-f-]{36}$/);
   });
 
+  it("sends website instructions and tools only when given", async () => {
+    const { fn, calls } = mockFetch(() => json(201, { taskId: "task_1", state: "pending" }));
+    await client(fn).startTask({
+      connectionId: "conn_1",
+      externalUserId: "u",
+      prompt: "hi",
+      instructions: "You are the Acme assistant.",
+      tools: [{ name: "acme", url: "https://acme.example/mcp", headers: [{ name: "Authorization", value: "Bearer t" }] }],
+    });
+    const body = JSON.parse(calls[0]!.init!.body as string);
+    expect(body.instructions).toBe("You are the Acme assistant.");
+    expect(body.tools).toEqual([{ name: "acme", url: "https://acme.example/mcp", headers: [{ name: "Authorization", value: "Bearer t" }] }]);
+    await client(fn).startTask({ connectionId: "conn_1", externalUserId: "u", prompt: "hi" });
+    const body2 = JSON.parse(calls[1]!.init!.body as string);
+    expect("instructions" in body2).toBe(false);
+    expect("tools" in body2).toBe(false);
+  });
+
   it("waitForPairing polls until a final status", async () => {
     const statuses = ["pending", "claimed", "accepted"];
     const { fn, calls } = mockFetch(() =>

@@ -63,6 +63,63 @@ importers:
         specifier: 3.0.5
         version: 3.0.5(@types/node@22.10.2)(happy-dom@15.11.7)(jsdom@25.0.1)
 
+  examples/code-review-assistant:
+    dependencies:
+      '@remote-acp/browser-helper':
+        specifier: workspace:*
+        version: link:../../packages/browser-helper
+      '@remote-acp/web-sdk':
+        specifier: workspace:*
+        version: link:../../packages/web-sdk
+    devDependencies:
+      '@types/node':
+        specifier: 22.10.2
+        version: 22.10.2
+      typescript:
+        specifier: 5.6.3
+        version: 5.6.3
+      vitest:
+        specifier: 2.1.8
+        version: 2.1.8(@types/node@22.10.2)(happy-dom@15.11.7)(jsdom@25.0.1)
+
+  examples/docs-generator:
+    dependencies:
+      '@remote-acp/browser-helper':
+        specifier: workspace:*
+        version: link:../../packages/browser-helper
+      '@remote-acp/web-sdk':
+        specifier: workspace:*
+        version: link:../../packages/web-sdk
+    devDependencies:
+      '@types/node':
+        specifier: 22.10.2
+        version: 22.10.2
+      typescript:
+        specifier: 5.6.3
+        version: 5.6.3
+      vitest:
+        specifier: 2.1.8
+        version: 2.1.8(@types/node@22.10.2)(happy-dom@15.11.7)(jsdom@25.0.1)
+
+  examples/minimal-integration:
+    dependencies:
+      '@remote-acp/browser-helper':
+        specifier: workspace:*
+        version: link:../../packages/browser-helper
+      '@remote-acp/web-sdk':
+        specifier: workspace:*
+        version: link:../../packages/web-sdk
+    devDependencies:
+      '@types/node':
+        specifier: 22.10.2
+        version: 22.10.2
+      typescript:
+        specifier: 5.6.3
+        version: 5.6.3
+      vitest:
+        specifier: 2.1.8
+        version: 2.1.8(@types/node@22.10.2)(happy-dom@15.11.7)(jsdom@25.0.1)
+
   examples/web-demo:
     dependencies:
       '@remote-acp/browser-helper':

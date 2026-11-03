@@ -4,6 +4,7 @@ import type {
   CreatePairingRequest,
   CreatePairingResponse,
   ListConnectionsResponse,
+  McpServer,
   PairingStatusResponse,
   StreamErrorEvent,
   TaskStreamEvent,
@@ -36,6 +37,17 @@ export interface StartTaskInput {
    * task instead of starting a second one. Generated if omitted.
    */
   idempotencyKey?: string;
+  /**
+   * Your own system instructions for the agent (appended to the agent's
+   * system prompt for this session, max 32 KiB). Changing them starts a new
+   * agent session on the desktop.
+   */
+  instructions?: string;
+  /**
+   * Your own tools: MCP servers (Streamable HTTP) on your verified domain.
+   * Requires the `agent.tools` scope at pairing time. Max 8.
+   */
+  tools?: McpServer[];
 }
 
 export interface WaitForPairingOptions {
@@ -236,6 +248,8 @@ export class RemoteAcp {
         externalUserId: input.externalUserId,
         prompt: input.prompt,
         idempotencyKey: input.idempotencyKey ?? randomKey(),
+        ...(input.instructions !== undefined ? { instructions: input.instructions } : {}),
+        ...(input.tools?.length ? { tools: input.tools } : {}),
       },
       opts?.signal,
     );

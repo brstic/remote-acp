@@ -42,6 +42,13 @@ _Last updated: 2026-11-02_
 | 17 Light/dark, responsive | ✅ macOS |
 | 18 Installable artifacts + docs | ✅ unsigned macOS artifacts |
 
+## 2026-11-03 additions
+- Website **instructions** (ACP `systemPrompt`) and **tools** (MCP over HTTP on the site's verified domain, `agent.tools` scope): Rust E2E, SDK E2E and real-agent tests (`site_tools_codex`, `site_tools_claude`) pass; both agents call the site's MCP tool and follow its instructions.
+- Secret-scanner hold-back: no partial credential prefix reaches the website.
+- Redesigned Activity chat (Markdown answers, grouped tool steps, plan progress, site customization card, typing indicator).
+- Three example apps (`minimal-integration`, `code-review-assistant`, `docs-generator`) with real end-to-end tests; integration guide.
+- Suites: Rust 59 passed (+10 real-agent, all passing), TypeScript 100 passed, desktop UI 25 passed. `site_tools_claude` failed intermittently (2 of ~18 runs, empty reply, not reproduced since; diagnostics added to the test).
+
 ## Not done yet / known limitations
 - GUI E2E is a scripted manual-run procedure (macOS only), not part of CI.
 - Two installed copies of the app (e.g. debug + release bundles) both register `remoteacp://`; macOS may hand the link to the non-running copy, whose single-instance hand-off drops the URL. Keep one installed copy (see troubleshooting).

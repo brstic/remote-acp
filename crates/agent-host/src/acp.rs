@@ -76,6 +76,26 @@ pub struct AgentCapabilities {
     pub load_session: bool,
     #[serde(default)]
     pub prompt_capabilities: PromptCapabilities,
+    #[serde(default)]
+    pub mcp_capabilities: McpCapabilities,
+    /// Raw session capabilities (e.g. `systemPrompt`).
+    #[serde(default)]
+    pub session_capabilities: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct McpCapabilities {
+    #[serde(default)]
+    pub http: bool,
+    #[serde(default)]
+    pub sse: bool,
+}
+
+impl AgentCapabilities {
+    pub fn supports_system_prompt(&self) -> bool {
+        self.session_capabilities.get("systemPrompt").map(|v| !v.is_null()).unwrap_or(false)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -448,6 +448,10 @@ struct CreateTask {
     external_user_id: String,
     prompt: String,
     idempotency_key: String,
+    #[serde(default)]
+    instructions: Option<String>,
+    #[serde(default)]
+    tools: Vec<bridge_protocol::McpServer>,
 }
 
 async fn create_task(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<CreateTask>) -> ApiResult<(StatusCode, Json<Value>)> {
@@ -461,7 +465,25 @@ async fn create_task(State(st): State<Shared>, headers: HeaderMap, Json(req): Js
     if req.prompt.len() > MAX_PROMPT_BYTES {
         return Err(ApiError::new(StatusCode::PAYLOAD_TOO_LARGE, "prompt_too_large", "Prompt is too large"));
     }
-    let request_hash = ids::sha256_hex(&format!("{}\n{}\n{}", req.connection_id, req.external_user_id, req.prompt));
+    if req.instructions.as_ref().map(|i| i.len() > bridge_protocol::MAX_INSTRUCTIONS_BYTES).unwrap_or(false) {
+        return Err(ApiError::new(StatusCode::PAYLOAD_TOO_LARGE, "instructions_too_large", "Instructions are too large"));
+    }
+    if req.tools.len() > bridge_protocol::MAX_TOOL_SERVERS {
+        return Err(ApiError::bad("invalid_tools", "Too many tool servers"));
+    }
+    for t in &req.tools {
+        if let Err(e) = t.validate() {
+            return Err(ApiError::bad("invalid_tools", e));
+        }
+    }
+    let request_hash = ids::sha256_hex(&format!(
+        "{}\n{}\n{}\n{}\n{}",
+        req.connection_id,
+        req.external_user_id,
+        req.prompt,
+        req.instructions.as_deref().unwrap_or(""),
+        serde_json::to_string(&req.tools).unwrap_or_default()
+    ));
     // Idempotency: same key returns the original task; a different body conflicts.
     {
         let rt = st.rt.lock().unwrap();
@@ -492,6 +514,9 @@ async fn create_task(State(st): State<Shared>, headers: HeaderMap, Json(req): Js
     if !conn.scopes.iter().any(|s| s == scopes::TASK_INTERACTIVE) {
         return Err(ApiError::new(StatusCode::FORBIDDEN, "missing_scope", "Connection lacks task.interactive"));
     }
+    if !req.tools.is_empty() && !conn.scopes.iter().any(|s| s == scopes::AGENT_TOOLS) {
+        return Err(ApiError::new(StatusCode::FORBIDDEN, "missing_scope", "The user did not allow this site to add tools (scope agent.tools)"));
+    }
     if !st.is_online(&conn.desktop_id) {
         return Err(ApiError::new(StatusCode::CONFLICT, "desktop_offline", "The desktop app is not connected"));
     }
@@ -502,6 +527,8 @@ async fn create_task(State(st): State<Shared>, headers: HeaderMap, Json(req): Js
             input: vec![InputBlock::Text { text: req.prompt.clone() }],
             mode: TaskMode::Interactive,
             service_id: svc.id.clone(),
+            instructions: req.instructions.clone().filter(|i| !i.trim().is_empty()),
+            tools: req.tools.clone(),
         }),
         &conn.id,
         &task_id,

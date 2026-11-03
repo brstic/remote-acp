@@ -148,7 +148,19 @@ export interface RelayHandle {
   dir: string;
 }
 
-export async function startRelay(): Promise<RelayHandle> {
+export interface RelayServiceEntry {
+  id: string;
+  displayName: string;
+  origin: string;
+  secretSha256: string;
+  verification: "operator" | "unverified" | "well_known";
+}
+
+/**
+ * Start the real relay binary on a free port. `services` replaces the default
+ * registry (svc_demo + svc_other) — the example apps register their own.
+ */
+export async function startRelay(opts: { services?: RelayServiceEntry[] } = {}): Promise<RelayHandle> {
   const dir = tmp("remoteacp-relay-");
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
@@ -156,7 +168,7 @@ export async function startRelay(): Promise<RelayHandle> {
     listen: `127.0.0.1:${port}`,
     publicUrl: url,
     database: join(dir, "relay.sqlite3"),
-    services: [
+    services: opts.services ?? [
       {
         id: "svc_demo",
         displayName: "Acme Notes (demo)",
@@ -196,7 +208,14 @@ export async function startRelay(): Promise<RelayHandle> {
   return { url, port, proc, dir };
 }
 
-export async function startDesktop(relayUrl: string): Promise<{ proc: Proc; workspace: string }> {
+/**
+ * Start the headless test desktop. `permissionChoice` is what it answers to
+ * every local permission prompt (`allow_once`, `allow_task` or `deny`).
+ */
+export async function startDesktop(
+  relayUrl: string,
+  opts: { permissionChoice?: "allow_once" | "allow_task" | "deny" } = {},
+): Promise<{ proc: Proc; workspace: string }> {
   const workspace = tmp("remoteacp-ws-");
   const child = spawn(DESKTOP_BIN, [], {
     cwd: workspace,
@@ -206,7 +225,7 @@ export async function startDesktop(relayUrl: string): Promise<{ proc: Proc; work
       RELAY_URL: relayUrl,
       WORKSPACE: workspace,
       MOCK_AGENT: MOCK_AGENT_BIN,
-      PERMISSION_CHOICE: "allow_once",
+      PERMISSION_CHOICE: opts.permissionChoice ?? "allow_once",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },
   });
@@ -215,7 +234,7 @@ export async function startDesktop(relayUrl: string): Promise<{ proc: Proc; work
   return { proc, workspace };
 }
 
-function sha256(s: string): string {
+export function sha256(s: string): string {
   return createHash("sha256").update(s).digest("hex");
 }
 
@@ -290,4 +309,29 @@ export class DroppingProxy {
     for (const s of this.sockets) s.destroy();
     await new Promise<void>((r) => this.server.close(() => r()));
   }
+}
+
+/** Feed a pairing link to a headless desktop's stdin and wait until it reports `paired`. */
+export async function pairDesktop(desktop: Proc, url: string, timeoutMs = 20_000): Promise<{ connectionId: string; service: string }> {
+  const from = desktop.lines.length;
+  desktop.write(`${url}\n`);
+  const v = await desktop.waitJson((l) => l.event === "paired" || l.event === "error", timeoutMs, from);
+  if (v.event !== "paired") throw new Error(`desktop pairing failed: ${JSON.stringify(v)}`);
+  return v as unknown as { connectionId: string; service: string };
+}
+
+/**
+ * Start a built Node server (`node <script>`) on a free port. The script must
+ * print `{"event":"listening","port":N}` on stdout (all example apps do).
+ */
+export async function startNodeServer(script: string, env: Record<string, string>, name = "app"): Promise<{ proc: Proc; base: string }> {
+  if (!existsSync(script)) throw new Error(`${script} is missing — build the package first (pnpm -r --filter '!remote-acp-desktop' build)`);
+  const child = spawn(process.execPath, [script], {
+    cwd: dirname(script),
+    stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, PORT: "0", HOST: "127.0.0.1", ...env },
+  });
+  const proc = new Proc(child, name);
+  const { port } = await proc.waitJson<{ port: number }>((v) => v.event === "listening", 20_000);
+  return { proc, base: `http://127.0.0.1:${port}` };
 }

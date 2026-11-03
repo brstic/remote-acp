@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>Minimal Integration (Example)</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <p class="banner" role="note"><strong>EXAMPLE</strong> · Remote ACP Bridge minimal integration. One fixed demo user, no sign-in — local development only.</p>
+    <main>
+      <h1>Ask the AI agent on your computer</h1>
+      <p class="muted">This page runs your own desktop agent (Codex, Claude Code or the Test agent) through Remote ACP Bridge. Your computer stays in control: you approve the connection and every task in the desktop app.</p>
+
+      <!-- Step 1: connect -->
+      <section class="card" id="connect-step">
+        <h2>1. Connect your desktop agent</h2>
+        <p id="conn-status" class="muted" aria-live="polite">Not connected.</p>
+        <div id="pairing"></div>
+        <button class="btn primary" id="connect" type="button">Connect</button>
+      </section>
+
+      <!-- Step 2: ask -->
+      <section class="card" id="ask-step" hidden>
+        <h2>2. Ask something</h2>
+        <form id="ask-form">
+          <label for="prompt">Question for your agent</label>
+          <textarea id="prompt" rows="3">Give me a one-paragraph overview of this project: what it does and how it is organised.</textarea>
+          <div class="actions">
+            <button class="btn primary" id="ask" type="submit">Ask</button>
+            <button class="btn" id="cancel" type="button" hidden>Cancel</button>
+            <span id="task-status" class="muted" aria-live="polite"></span>
+          </div>
+        </form>
+        <pre id="answer" class="answer" aria-live="polite"></pre>
+      </section>
+    </main>
+  </body>
+</html>

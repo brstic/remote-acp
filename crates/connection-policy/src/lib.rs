@@ -307,6 +307,9 @@ impl Grant {
         if !self.scopes.iter().any(|s| s == scopes::TASK_INTERACTIVE) {
             return Err(TaskDenied::MissingScope);
         }
+        if !req.tools.is_empty() && !self.scopes.iter().any(|s| s == scopes::AGENT_TOOLS) {
+            return Err(TaskDenied::MissingScope);
+        }
         Ok(())
     }
 }
@@ -424,6 +427,8 @@ mod tests {
             input: vec![InputBlock::Text { text: "x".into() }],
             mode: TaskMode::Interactive,
             service_id: svc.into(),
+            instructions: None,
+            tools: vec![],
         }
     }
 

@@ -30,7 +30,10 @@ const BridgeCtx = createContext<Ctx | null>(null);
 export function BridgeProvider({ children }: { children: ReactNode }) {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [route, setRoute] = useState<Route>("overview");
+  const [route, setRoute] = useState<Route>(() => {
+    const r = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("route") : null;
+    return (r as Route) || "overview";
+  });
   const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const pending = useRef<number | null>(null);

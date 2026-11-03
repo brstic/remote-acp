@@ -11,7 +11,9 @@ Relay → desktop: `connection.ready`, `connection.revoke`, `task.start`, `task.
 Desktop → relay: `connection.hello`, `connection.revoke`, `connection.state`, `task.accepted`, `task.rejected`, `task.event`, `task.completed`, `task.failed`, `heartbeat`, `error`.
 Anything else is rejected. Task events: `status`, `text_delta`, `thought_delta`, `plan`, `tool_call`, `tool_call_update`, `permission_pending`, `permission_resolved`.
 
-Limits: frame 1 MiB, prompt 64 KiB, text delta 256 KiB, ids `[A-Za-z0-9_.:-]{1,128}`. Contract fixtures: `tests/contract/*.json` (checked by Rust and TS tests).
+`task.start` payload: `{externalUserId, serviceId, input:[{type:"text",text}], mode:"interactive", instructions?, tools?:[{name,url,headers?:[{name,value}]}]}`. Scopes: `task.interactive`, `agent.tools`.
+
+Limits: frame 1 MiB, prompt 64 KiB, instructions 32 KiB, 8 tool servers, text delta 256 KiB, ids `[A-Za-z0-9_.:-]{1,128}`. Contract fixtures: `tests/contract/*.json` (checked by Rust and TS tests).
 
 ## Service REST API (auth `Bearer <serviceId>.<secret>`)
 | Method | Path | Notes |
@@ -21,7 +23,7 @@ Limits: frame 1 MiB, prompt 64 KiB, text delta 256 KiB, ids `[A-Za-z0-9_.:-]{1,1
 | GET | /v1/connections?externalUserId= | own connections for that user |
 | GET | /v1/connections/{id} | status active/paused/revoked/expired, `online` |
 | POST | /v1/connections/{id}/revoke | |
-| POST | /v1/tasks | `{connectionId, externalUserId, prompt, idempotencyKey}` → 201 (200 on idempotent replay) |
+| POST | /v1/tasks | `{connectionId, externalUserId, prompt, idempotencyKey, instructions?, tools?}` → 201 (200 on idempotent replay) |
 | GET | /v1/tasks/{id} | summary |
 | POST | /v1/tasks/{id}/cancel | |
 | GET | /v1/tasks/{id}/events | SSE, `id` = seq, supports `Last-Event-ID`; ends after terminal event |

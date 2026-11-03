@@ -17,7 +17,9 @@ export const MAX_PROMPT_BYTES = 64 * 1024;
 export const MAX_TEXT_DELTA_BYTES = 256 * 1024;
 export const MAX_ID_LEN = 128;
 
-export const SCOPES = ["task.interactive"] as const;
+export const SCOPES = ["task.interactive", "agent.tools"] as const;
+export const MAX_INSTRUCTIONS_BYTES = 32 * 1024;
+export const MAX_TOOL_SERVERS = 8;
 export type Scope = (typeof SCOPES)[number];
 
 // ---------------------------------------------------------------------------
@@ -98,11 +100,24 @@ export interface ConnectionStatePayload {
   state: "active" | "paused";
 }
 export type InputBlock = { type: "text"; text: string };
+/** A website-provided MCP server (Streamable HTTP) on the website's own domain. */
+export interface McpServer {
+  /** 1-64 chars of [A-Za-z0-9_-]. */
+  name: string;
+  /** https URL on the service's verified domain (http only for localhost during development). */
+  url: string;
+  headers?: { name: string; value: string }[];
+}
+
 export interface TaskStart {
   externalUserId: string;
   input: InputBlock[];
   mode: "interactive";
   serviceId: string;
+  /** Appended to the agent's system prompt for the session. */
+  instructions?: string;
+  /** Requires the `agent.tools` scope. */
+  tools?: McpServer[];
 }
 export interface TaskCompleted {
   /** ACP stop reason (`end_turn`, `max_tokens`, `refusal`, `cancelled`, ...). */
@@ -244,6 +259,8 @@ export interface CreateTaskRequest {
   externalUserId: string;
   prompt: string;
   idempotencyKey: string;
+  instructions?: string;
+  tools?: McpServer[];
 }
 
 /** Relay-side task state (`RelayTaskState`). */

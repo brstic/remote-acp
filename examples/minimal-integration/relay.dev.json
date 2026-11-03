@@ -1,0 +1,14 @@
+{
+  "listen": "127.0.0.1:8787",
+  "publicUrl": "http://127.0.0.1:8787",
+  "database": "relay.dev.sqlite3",
+  "services": [
+    {
+      "id": "svc_minimal",
+      "displayName": "Minimal Integration (example)",
+      "origin": "http://localhost:3101",
+      "secretSha256": "b62f9bfc7b0ffcc6fa6e128e23459bcdb0ecf66db55348940ec3b8a80556689e",
+      "verification": "operator"
+    }
+  ]
+}

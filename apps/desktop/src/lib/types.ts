@@ -89,6 +89,10 @@ export interface TaskView {
   workspace: string;
   state: TaskState;
   prompt: string;
+  /** Website-provided system instructions for this task. */
+  instructions?: string | null;
+  /** Website-provided tool servers ("name (url)"). */
+  tools?: string[];
   transcript: TranscriptItem[];
   createdAt: string;
   finishedAt: string | null;

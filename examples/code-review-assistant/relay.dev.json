@@ -1,0 +1,14 @@
+{
+  "listen": "127.0.0.1:8787",
+  "publicUrl": "http://127.0.0.1:8787",
+  "database": "relay.dev.sqlite3",
+  "services": [
+    {
+      "id": "svc_code_review",
+      "displayName": "Code Review Assistant (example)",
+      "origin": "http://localhost:3102",
+      "secretSha256": "5051dae8ea0c098a01eafe6f22878e0e7ce74628f6b4f4f4d7cb3c73fd9660ca",
+      "verification": "operator"
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { isPreview, previewSnapshot } from "./preview";
 import type {
   AcceptOptions,
   AccessLevel,
@@ -15,6 +16,10 @@ import type {
 export class ApiError extends Error {}
 
 async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  if (isPreview()) {
+    // Browser preview with sample data (never inside the app).
+    return (cmd === "get_snapshot" ? previewSnapshot : undefined) as T;
+  }
   try {
     return await invoke<T>(cmd, args);
   } catch (e) {
@@ -55,6 +60,7 @@ export const api = {
 };
 
 export function onBridgeEvent(cb: (e: UiEvent) => void): Promise<UnlistenFn> {
+  if (isPreview()) return Promise.resolve(() => {});
   return listen<UiEvent>("bridge://event", (ev) => cb(ev.payload));
 }
 

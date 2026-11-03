@@ -1,0 +1,14 @@
+{
+  "listen": "127.0.0.1:8787",
+  "publicUrl": "http://127.0.0.1:8787",
+  "database": "relay.dev.sqlite3",
+  "services": [
+    {
+      "id": "svc_docs_generator",
+      "displayName": "Docs Generator (example)",
+      "origin": "http://localhost:3103",
+      "secretSha256": "045780afcfb39913b1dd849bb626a06008868ccafad09561df10b92dad7a03fd",
+      "verification": "operator"
+    }
+  ]
+}

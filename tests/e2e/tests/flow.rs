@@ -442,6 +442,7 @@ async fn output_firewall_blocks_agent_own_file_reads_and_secrets() {
     let (_, t) = svc.start_task(&conn, "u", "secret").await;
     let ev = svc.events(t["taskId"].as_str().unwrap(), None).await;
     assert!(!text_of(&ev).contains("DNN7EXAMPLE"), "{ev:?}");
+    assert!(!text_of(&ev).contains("AKIA"), "partial credential leaked: {ev:?}");
     assert_eq!(terminal(&ev).unwrap()["payload"]["code"], "policy_blocked");
     let audit = d.bridge.diagnostics().await.audit;
     assert!(audit.iter().filter(|a| a.event_type == "output_blocked").count() >= 2);
@@ -520,4 +521,101 @@ async fn access_level_change_restarts_session_in_new_mode_and_forget() {
     d.bridge.forget_grant(&conn).unwrap();
     assert!(d.bridge.snapshot().grants.iter().all(|g| g.connection_id != conn));
     assert!(d.bridge.diagnostics().await.audit.iter().any(|a| a.event_type == "connection_updated"));
+}
+
+async fn pair_with_scopes(d: &Desktop, svc: &Service, user: &str, scopes: &[&str]) -> String {
+    let (_, p) = svc.post("/v1/pairings", json!({"externalUserId": user, "scopes": scopes})).await;
+    let req = d.bridge.begin_pairing(p["url"].as_str().unwrap()).await.unwrap();
+    assert_eq!(req.scopes, scopes.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+    d.bridge
+        .accept_pairing(
+            &req.pairing_id,
+            bridge_core::AcceptOptions {
+                provider_id: "mock".into(),
+                workspace: d.workspace_path(),
+                access: Default::default(),
+                require_task_approval: false,
+                duration_secs: 3600,
+                acknowledge_terms: false,
+            },
+        )
+        .await
+        .unwrap()
+        .connection_id
+}
+
+#[tokio::test]
+async fn website_instructions_and_tools() {
+    let (_r, d, svc) = setup().await;
+    let task = |conn: String, body: serde_json::Value| {
+        let svc = &svc;
+        async move {
+            let mut b = json!({"connectionId": conn, "externalUserId": "u", "prompt": "whoami", "idempotencyKey": bridge_protocol::ids::new_id("k")});
+            for (k, v) in body.as_object().unwrap() {
+                b[k] = v.clone();
+            }
+            svc.post("/v1/tasks", b).await
+        }
+    };
+
+    // Without the agent.tools scope: instructions OK, tools refused by the relay.
+    let plain = d.pair(&svc, "u", false).await;
+    let (s, t) = task(plain.clone(), json!({"instructions": "You are the Alpha Notes assistant."})).await;
+    assert_eq!(s, 201, "{t}");
+    let ev = svc.events(t["taskId"].as_str().unwrap(), None).await;
+    assert_eq!(text_of(&ev), "SYSTEM=You are the Alpha Notes assistant.; TOOLS=none");
+    let (s, v) = task(plain.clone(), json!({"tools": [{"name": "notes", "url": "http://localhost:3000/mcp"}]})).await;
+    assert_eq!(s, 403, "{v}");
+    assert_eq!(v["error"]["code"], "missing_scope");
+    d.bridge.revoke_grant(&plain).await.unwrap();
+
+    // With agent.tools: tools on the site's own origin reach the agent.
+    let conn = pair_with_scopes(&d, &svc, "u", &["task.interactive", "agent.tools"]).await;
+    let (s, t) = task(
+        conn.clone(),
+        json!({"instructions": "Use the notes tool.", "tools": [{"name": "notes", "url": "http://localhost:3000/mcp", "headers": [{"name": "Authorization", "value": "Bearer site-token"}]}]}),
+    )
+    .await;
+    assert_eq!(s, 201, "{t}");
+    let ev = svc.events(t["taskId"].as_str().unwrap(), None).await;
+    assert_eq!(text_of(&ev), "SYSTEM=Use the notes tool.; TOOLS=notes");
+    // The desktop shows the site's instructions and tools to the user.
+    let tv = d.bridge.snapshot().tasks.into_iter().find(|x| x.id == t["taskId"].as_str().unwrap()).unwrap();
+    assert_eq!(tv.instructions.as_deref(), Some("Use the notes tool."));
+    assert_eq!(tv.tools, vec!["notes (http://localhost:3000/mcp)".to_string()]);
+
+    // Changing instructions restarts the session with the new setup.
+    let (_, t) = task(conn.clone(), json!({"instructions": "Be brief."})).await;
+    let ev = svc.events(t["taskId"].as_str().unwrap(), None).await;
+    assert_eq!(text_of(&ev), "SYSTEM=Be brief.; TOOLS=none");
+
+    // Tools on another domain are refused on the desktop.
+    for url in ["https://evil.example/mcp", "http://192.168.1.1/mcp"] {
+        let (s, t) = task(conn.clone(), json!({"tools": [{"name": "x", "url": url}]})).await;
+        if s == 400 {
+            continue; // structurally invalid (e.g. plain http) is rejected by the relay already
+        }
+        let ev = svc.events(t["taskId"].as_str().unwrap(), None).await;
+        let fin = terminal(&ev).unwrap();
+        assert_eq!(fin["kind"], "task.rejected", "{url}");
+        assert_eq!(fin["payload"]["code"], "tools_not_allowed", "{url}");
+    }
+    // Structural validation on the relay.
+    let (s, _) = task(conn.clone(), json!({"tools": [{"name": "bad name", "url": "https://localhost/mcp"}]})).await;
+    assert_eq!(s, 400);
+    let (s, _) = task(conn.clone(), json!({"instructions": "x".repeat(40_000)})).await;
+    assert_eq!(s, 413);
+}
+
+#[test]
+fn tool_urls_must_be_on_the_site_domain() {
+    use bridge_core::engine::tool_url_allowed as ok;
+    assert!(ok("https://app.acme.com/mcp", "https://app.acme.com"));
+    assert!(ok("https://tools.app.acme.com/mcp", "https://app.acme.com"));
+    assert!(!ok("https://acme.com.evil.io/mcp", "https://app.acme.com"));
+    assert!(!ok("http://app.acme.com/mcp", "https://app.acme.com"));
+    assert!(!ok("https://localhost/mcp", "https://app.acme.com"));
+    assert!(!ok("https://127.0.0.1/mcp", "https://app.acme.com"));
+    assert!(ok("http://localhost:3000/mcp", "http://localhost:3000"));
+    assert!(!ok("https://evil.example/mcp", "http://localhost:3000"));
 }

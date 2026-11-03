@@ -29,6 +29,8 @@ struct State {
     cancelled: Mutex<HashMap<String, Arc<AtomicBool>>>,
     authenticated: AtomicBool,
     sessions: AtomicU64,
+    /// Per-session system prompt and MCP server names received in session/new.
+    setup: Mutex<HashMap<String, (Option<String>, Vec<String>)>>,
 }
 
 impl State {
@@ -75,6 +77,7 @@ pub async fn run() {
         cancelled: Mutex::new(HashMap::new()),
         authenticated: AtomicBool::new(std::env::var("MOCK_REQUIRE_AUTH").ok().as_deref() != Some("1")),
         sessions: AtomicU64::new(0),
+        setup: Mutex::new(HashMap::new()),
     });
     eprintln!("mock-acp-agent: started");
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
@@ -130,7 +133,9 @@ async fn handle(state: &Arc<State>, method: &str, params: Value) -> Result<Value
             };
             Ok(json!({
                 "protocolVersion": 1,
-                "agentCapabilities": {"loadSession": false, "promptCapabilities": {"image": false, "audio": false, "embeddedContext": false}},
+                "agentCapabilities": {"loadSession": false, "promptCapabilities": {"image": false, "audio": false, "embeddedContext": false},
+                                      "mcpCapabilities": {"http": true, "sse": false},
+                                      "sessionCapabilities": {"systemPrompt": {}}},
                 "authMethods": auth,
                 "agentInfo": {"name": "mock-acp-agent", "title": "Test agent", "version": "1.0.0"}
             }))
@@ -154,6 +159,16 @@ async fn handle(state: &Arc<State>, method: &str, params: Value) -> Result<Value
                 .lock()
                 .unwrap()
                 .insert(sid.clone(), Arc::new(AtomicBool::new(false)));
+            let sp = params
+                .pointer("/systemPrompt/content")
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(|b| b.get("text").and_then(Value::as_str)).collect::<Vec<_>>().join("\n"));
+            let tools: Vec<String> = params
+                .get("mcpServers")
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(|m| m.get("name").and_then(Value::as_str).map(str::to_string)).collect())
+                .unwrap_or_default();
+            state.setup.lock().unwrap().insert(sid.clone(), (sp, tools));
             Ok(json!({
                 "sessionId": sid,
                 "modes": {"currentModeId": "ask", "availableModes": [
@@ -201,6 +216,16 @@ async fn prompt(
 ) -> Result<Value, (i64, String)> {
     let lower = text.to_lowercase();
     let done = |reason: &str| Ok(json!({"stopReason": reason}));
+
+    if lower.contains("whoami") {
+        let (sp, tools) = state.setup.lock().unwrap().get(sid).cloned().unwrap_or_default();
+        state.chunk(sid, &format!(
+            "SYSTEM={}; TOOLS={}",
+            sp.unwrap_or_else(|| "none".into()),
+            if tools.is_empty() { "none".into() } else { tools.join(",") }
+        ));
+        return done("end_turn");
+    }
 
     if lower.contains("noise") {
         let _ = state.out.send("this is not json-rpc".into());

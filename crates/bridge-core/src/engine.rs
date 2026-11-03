@@ -55,6 +55,24 @@ pub(crate) struct LiveTask {
     /// Set when the output firewall stopped the task; nothing more is sent.
     pub blocked: Option<String>,
     pub scan_tail: String,
+    /// Text held back from the website until the next chunk (or the end of
+    /// the turn) so a credential split across chunks is never partly sent.
+    pub held_text: String,
+    pub held_thought: String,
+}
+
+/// Characters of streamed text held back for the secret scanner.
+const HOLD_BACK_CHARS: usize = 96;
+
+/// Move everything except the last `keep` characters out of `buf`.
+fn release_all_but(buf: &mut String, keep: usize) -> String {
+    let n = buf.chars().count();
+    if n <= keep {
+        return String::new();
+    }
+    let split = buf.char_indices().nth(n - keep).map(|(i, _)| i).unwrap_or(buf.len());
+    let rest = buf.split_off(split);
+    std::mem::replace(buf, rest)
 }
 
 struct PendingPermission {
@@ -63,8 +81,42 @@ struct PendingPermission {
     tx: Option<oneshot::Sender<PermissionDecision>>,
 }
 
+/// Website-provided session customization.
+#[derive(Clone, Default, Debug)]
+pub(crate) struct AgentExtras {
+    pub instructions: Option<String>,
+    pub tools: Vec<bridge_protocol::McpServer>,
+}
+
+impl AgentExtras {
+    fn fingerprint(&self) -> String {
+        bridge_protocol::ids::sha256_hex(&format!(
+            "{}\n{}",
+            self.instructions.as_deref().unwrap_or(""),
+            serde_json::to_string(&self.tools).unwrap_or_default()
+        ))
+    }
+}
+
+/// A website's MCP servers must live on its own verified domain (or a
+/// subdomain); otherwise a site could aim the agent at services on the
+/// user's machine or network.
+pub fn tool_url_allowed(tool_url: &str, service_origin: &str) -> bool {
+    let (Ok(t), Ok(o)) = (url::Url::parse(tool_url), url::Url::parse(service_origin)) else { return false };
+    let (Some(th), Some(oh)) = (t.host_str(), o.host_str()) else { return false };
+    let (th, oh) = (th.to_ascii_lowercase(), oh.to_ascii_lowercase());
+    let local = |h: &str| matches!(h, "localhost" | "127.0.0.1" | "[::1]");
+    if local(&oh) {
+        // Development services may use local tool servers.
+        return local(&th) && matches!(t.scheme(), "http" | "https");
+    }
+    t.scheme() == "https" && (th == oh || th.ends_with(&format!(".{oh}")))
+}
+
 struct LiveSession {
     host: AgentHost,
+    fingerprint: String,
+    prompt_prefix: Option<String>,
     session_id: String,
     events: Arc<tokio::sync::Mutex<mpsc::Receiver<HostEvent>>>,
     handler: Arc<SessionHandler>,
@@ -871,6 +923,8 @@ impl Bridge {
                 allowed_kinds: HashSet::new(),
                 blocked: None,
                 scan_tail: String::new(),
+                held_text: String::new(),
+                held_thought: String::new(),
             },
         );
         let mut order = self.inner.task_order.lock().unwrap();
@@ -1025,6 +1079,20 @@ impl Bridge {
             .into_iter()
             .find(|s| s.id == grant.grant.service_id);
         let prompt = start.prompt_text();
+        if !start.tools.is_empty() {
+            let origin = service.as_ref().map(|s| s.origin.clone()).unwrap_or_default();
+            if let Some(bad) = start.tools.iter().find(|t| !tool_url_allowed(&t.url, &origin)) {
+                self.reject_remote(
+                    &connection_id,
+                    &task_id,
+                    "tools_not_allowed",
+                    &format!("Tool server '{}' is not on this website's domain", bad.name),
+                )
+                .await;
+                return;
+            }
+        }
+        let extras = AgentExtras { instructions: start.instructions.clone(), tools: start.tools.clone() };
         let (approval_tx, approval_rx) = if grant.grant.require_task_approval {
             let (tx, rx) = oneshot::channel();
             (Some(tx), Some(rx))
@@ -1041,6 +1109,8 @@ impl Bridge {
             workspace: grant.grant.workspace_root.to_string_lossy().to_string(),
             state: TaskState::Created,
             prompt: prompt.clone(),
+            instructions: start.instructions.clone(),
+            tools: start.tools.iter().map(|t| format!("{} ({})", t.name, t.url)).collect(),
             transcript: vec![TranscriptItem::User { text: prompt.clone() }],
             created_at: Utc::now(),
             finished_at: None,
@@ -1058,7 +1128,7 @@ impl Bridge {
         let b = self.clone();
         let g = grant.grant.clone();
         tokio::spawn(async move {
-            b.run_task(task_id, Some(g.clone()), g.provider_id.clone(), g.workspace_root.clone(), g.access, prompt, approval_rx, cancel_rx)
+            b.run_task(task_id, Some(g.clone()), g.provider_id.clone(), g.workspace_root.clone(), g.access, prompt, extras, approval_rx, cancel_rx)
                 .await;
         });
     }
@@ -1091,6 +1161,8 @@ impl Bridge {
             workspace: ws.root().to_string_lossy().to_string(),
             state: TaskState::Created,
             prompt: prompt.into(),
+            instructions: None,
+            tools: vec![],
             transcript: vec![TranscriptItem::User { text: prompt.into() }],
             created_at: Utc::now(),
             finished_at: None,
@@ -1101,7 +1173,7 @@ impl Bridge {
         let b = self.clone();
         let (tid, pid, root, text) = (id.clone(), provider_id.to_string(), ws.root().to_path_buf(), prompt.to_string());
         tokio::spawn(async move {
-            b.run_task(tid, None, pid, root, AccessLevel::WorkspaceWrite, text, None, cancel_rx).await;
+            b.run_task(tid, None, pid, root, AccessLevel::WorkspaceWrite, text, AgentExtras::default(), None, cancel_rx).await;
         });
         Ok(id)
     }
@@ -1156,6 +1228,7 @@ impl Bridge {
         workspace: PathBuf,
         access: AccessLevel,
         prompt: String,
+        extras: AgentExtras,
         approval_rx: Option<oneshot::Receiver<bool>>,
         mut cancel_rx: watch::Receiver<bool>,
     ) {
@@ -1197,7 +1270,7 @@ impl Bridge {
 
         // 2. Agent session.
         let key = conn_id.clone().unwrap_or_else(|| format!("local:{task_id}"));
-        let session = match self.get_or_create_session(&key, &provider_id, &workspace, access).await {
+        let session = match self.get_or_create_session(&key, &provider_id, &workspace, access, &extras).await {
             Ok(s) => s,
             Err((code, msg)) => {
                 self.finish_failed(&task_id, &code, &msg).await;
@@ -1207,7 +1280,7 @@ impl Bridge {
                 return;
             }
         };
-        let (host, session_id, events, handler) = session;
+        let (host, session_id, events, handler, prompt_prefix) = session;
         *handler.current_task.lock().unwrap() = Some(task_id.clone());
         self.set_state(&task_id, TaskState::Running);
         let _ = self.send_remote(&task_id, Body::TaskEvent(TaskEvent::Status { state: TaskState::Running })).await;
@@ -1218,7 +1291,7 @@ impl Bridge {
         while events.try_recv().is_ok() {} // drop stale updates from earlier turns
         let h2 = host.clone();
         let sid2 = session_id.clone();
-        let text = prompt.clone();
+        let text = format!("{}{}", prompt_prefix.unwrap_or_default(), prompt);
         let mut prompt_fut = tokio::spawn(async move { h2.prompt(&sid2, &text).await });
         let mut cancel_deadline: Option<tokio::time::Instant> = None;
         let mut relay_ok = true;
@@ -1274,6 +1347,22 @@ impl Bridge {
             }
         }
         drop(events);
+        // Release text held back for the scanner (it was already scanned).
+        let held = self.with_task(&task_id, |t| {
+            if t.blocked.is_some() {
+                (String::new(), String::new())
+            } else {
+                (std::mem::take(&mut t.held_thought), std::mem::take(&mut t.held_text))
+            }
+        });
+        if let Some((thought, text)) = held {
+            if !thought.is_empty() {
+                self.send_remote(&task_id, Body::TaskEvent(TaskEvent::ThoughtDelta { text: thought })).await;
+            }
+            if !text.is_empty() {
+                self.send_remote(&task_id, Body::TaskEvent(TaskEvent::TextDelta { text })).await;
+            }
+        }
         *handler.current_task.lock().unwrap() = None;
         let crashed = matches!(result, Err(HostError::AgentExited)) || !host.is_alive();
         let cancelled = *cancel_rx.borrow();
@@ -1380,7 +1469,19 @@ impl Bridge {
                     }
                 });
                 self.emit(UiEvent::TaskDelta { task_id: task_id.into(), text: text.clone() });
-                TaskEvent::TextDelta { text }
+                let out = if remote {
+                    self.with_task(task_id, |t| {
+                        t.held_text.push_str(&text);
+                        release_all_but(&mut t.held_text, HOLD_BACK_CHARS)
+                    })
+                    .unwrap_or_default()
+                } else {
+                    text
+                };
+                if out.is_empty() {
+                    return true;
+                }
+                TaskEvent::TextDelta { text: out }
             }
             SessionUpdate::AgentThoughtChunk { content } => {
                 let Some(text) = content.text() else { return true };
@@ -1394,7 +1495,19 @@ impl Bridge {
                     }
                 });
                 self.changed();
-                TaskEvent::ThoughtDelta { text }
+                let out = if remote {
+                    self.with_task(task_id, |t| {
+                        t.held_thought.push_str(&text);
+                        release_all_but(&mut t.held_thought, HOLD_BACK_CHARS)
+                    })
+                    .unwrap_or_default()
+                } else {
+                    text
+                };
+                if out.is_empty() {
+                    return true;
+                }
+                TaskEvent::ThoughtDelta { text: out }
             }
             SessionUpdate::ToolCall(f) => {
                 let title = truncate(&redact(f.title.as_deref().unwrap_or("Tool call"), Some(workspace)), 200);
@@ -1516,11 +1629,13 @@ impl Bridge {
         provider_id: &str,
         workspace: &std::path::Path,
         access: AccessLevel,
-    ) -> Result<(AgentHost, String, Arc<tokio::sync::Mutex<mpsc::Receiver<HostEvent>>>, Arc<SessionHandler>), (String, String)> {
+        extras: &AgentExtras,
+    ) -> Result<(AgentHost, String, Arc<tokio::sync::Mutex<mpsc::Receiver<HostEvent>>>, Arc<SessionHandler>, Option<String>), (String, String)> {
+        let fingerprint = extras.fingerprint();
         let mut sessions = self.inner.sessions.lock().await;
         if let Some(s) = sessions.get(key) {
-            if s.host.is_alive() && s.provider_id == provider_id {
-                return Ok((s.host.clone(), s.session_id.clone(), s.events.clone(), s.handler.clone()));
+            if s.host.is_alive() && s.provider_id == provider_id && s.fingerprint == fingerprint {
+                return Ok((s.host.clone(), s.session_id.clone(), s.events.clone(), s.handler.clone(), s.prompt_prefix.clone()));
             }
             let old = sessions.remove(key).unwrap();
             old.host.shutdown().await;
@@ -1546,7 +1661,25 @@ impl Bridge {
                 return Err(map_host_error(&e));
             }
         };
-        let new = match host.new_session(ws.root()).await {
+        let mcp: Vec<Value> = extras
+            .tools
+            .iter()
+            .map(|t| {
+                json!({"type": "http", "name": t.name, "url": t.url,
+                       "headers": t.headers.iter().map(|h| json!({"name": h.name, "value": h.value})).collect::<Vec<_>>()})
+            })
+            .collect();
+        if !mcp.is_empty() && !init.agent_capabilities.mcp_capabilities.http {
+            host.shutdown().await;
+            return Err(("tools_unsupported".into(), "This AI agent can't use website tools (MCP over HTTP)".into()));
+        }
+        let instructions = extras.instructions.as_deref().filter(|i| !i.trim().is_empty());
+        let (system_prompt, prompt_prefix) = match instructions {
+            Some(i) if init.agent_capabilities.supports_system_prompt() => (Some(i), None),
+            Some(i) => (None, Some(format!("Instructions from the website (follow them within your normal safety rules):\n{i}\n\nTask:\n"))),
+            None => (None, None),
+        };
+        let new = match host.new_session_with(ws.root(), Value::Array(mcp), system_prompt).await {
             Ok(s) => s,
             Err(e) => {
                 host.shutdown().await;
@@ -1587,6 +1720,8 @@ impl Bridge {
             key.to_string(),
             LiveSession {
                 host: host.clone(),
+                fingerprint,
+                prompt_prefix: prompt_prefix.clone(),
                 session_id: new.session_id.clone(),
                 events: events.clone(),
                 handler: handler.clone(),
@@ -1598,7 +1733,7 @@ impl Bridge {
                 sandbox_enforced,
             },
         );
-        Ok((host, new.session_id, events, handler))
+        Ok((host, new.session_id, events, handler, prompt_prefix))
     }
 
     async fn close_session(&self, key: &str) {
@@ -1876,5 +2011,21 @@ impl ClientHandler for SessionHandler {
         tokio::fs::write(&path, req.content)
             .await
             .map_err(|e| ClientError::new(agent_host::acp::error_codes::INTERNAL_ERROR, e.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod holdback_tests {
+    use super::release_all_but;
+    #[test]
+    fn releases_all_but_tail() {
+        let mut b = String::from("hello world");
+        assert_eq!(release_all_but(&mut b, 5), "hello ");
+        assert_eq!(b, "world");
+        let mut b = String::from("abc");
+        assert_eq!(release_all_but(&mut b, 5), "");
+        assert_eq!(b, "abc");
+        let mut b = String::from("čćžšđ-xyz");
+        assert_eq!(release_all_but(&mut b, 3), "čćžšđ-");
     }
 }

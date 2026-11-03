@@ -79,6 +79,12 @@ pub struct TaskView {
     pub workspace: String,
     pub state: bridge_protocol::TaskState,
     pub prompt: String,
+    /// Website-provided instructions for this task (shown to the user).
+    #[serde(default)]
+    pub instructions: Option<String>,
+    /// Website-provided tool servers (name and URL).
+    #[serde(default)]
+    pub tools: Vec<String>,
     pub transcript: Vec<TranscriptItem>,
     pub created_at: DateTime<Utc>,
     pub finished_at: Option<DateTime<Utc>>,

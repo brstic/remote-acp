@@ -187,6 +187,34 @@ describe("web-sdk against the real relay + desktop", () => {
     expect(terminalOf(events)?.payload).toEqual({ stopReason: "end_turn" });
   });
 
+  it("website instructions and tools: scope enforced, delivered to the agent session", async () => {
+    // The first connection only has task.interactive: tools are refused, instructions work.
+    const noTools = await sdk
+      .startTask({ connectionId, externalUserId: USER, prompt: "whoami", tools: [{ name: "acme", url: "http://localhost:3000/mcp" }] })
+      .catch((e: unknown) => e);
+    expect(noTools).toMatchObject({ code: "missing_scope", status: 403 });
+    const t1 = await sdk.startTask({ connectionId, externalUserId: USER, prompt: "whoami", instructions: "You are the Acme assistant." });
+    expect(textOf(await collect(sdk.streamEvents(t1.taskId)))).toBe("SYSTEM=You are the Acme assistant.; TOOLS=none");
+
+    // A second user pairs with agent.tools and gets tools delivered.
+    const user2 = `${USER}-tools`;
+    const p = await sdk.createPairing({ externalUserId: user2, scopes: ["task.interactive", "agent.tools"], expiresInSeconds: 120 });
+    const paired = await pairWithDesktop(p.url);
+    await waitOnline(paired.connectionId);
+    const t2 = await sdk.startTask({
+      connectionId: paired.connectionId,
+      externalUserId: user2,
+      prompt: "whoami",
+      instructions: "Use the acme tool.",
+      tools: [{ name: "acme", url: "http://localhost:3000/mcp", headers: [{ name: "Authorization", value: "Bearer t" }] }],
+    });
+    expect(textOf(await collect(sdk.streamEvents(t2.taskId)))).toBe("SYSTEM=Use the acme tool.; TOOLS=acme");
+    // Tools on another domain are rejected by the desktop.
+    const t3 = await sdk.startTask({ connectionId: paired.connectionId, externalUserId: user2, prompt: "whoami", tools: [{ name: "x", url: "https://evil.example/mcp" }] });
+    const ev3 = await collect(sdk.streamEvents(t3.taskId));
+    expect(terminalOf(ev3)).toMatchObject({ kind: "task.rejected", payload: { code: "tools_not_allowed" } });
+  });
+
   it("isolates services: another service cannot see this task or connection", async () => {
     const other = new RemoteAcp({ serviceId: "svc_other", serviceSecret: OTHER_SECRET, relayUrl: relay.url });
     const t = await sdk.startTask({ connectionId, externalUserId: USER, prompt: "hello again" });

@@ -118,6 +118,12 @@ export function PairingConsent({ req }: { req: PairingRequestView }) {
             <dd className="mono small">{req.externalUserId}</dd>
             <dt>Request expires</dt>
             <dd>{timeUntil(req.expiresAt)}</dd>
+            {req.scopes.includes("agent.tools") && (
+              <>
+                <dt>Also requested</dt>
+                <dd>Give the agent its own tools (MCP servers on {req.service.domain})</dd>
+              </>
+            )}
           </dl>
 
           <div className="field">

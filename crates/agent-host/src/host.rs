@@ -514,12 +514,18 @@ impl AgentHost {
     }
 
     pub async fn new_session(&self, cwd: &Path) -> Result<NewSessionResponse, HostError> {
+        self.new_session_with(cwd, Value::Array(vec![]), None).await
+    }
+
+    /// `session/new` with MCP servers (ACP `McpServer` JSON values) and an
+    /// optional appended system prompt (ACP `systemPrompt`, append mode).
+    pub async fn new_session_with(&self, cwd: &Path, mcp_servers: Value, system_prompt: Option<&str>) -> Result<NewSessionResponse, HostError> {
+        let mut params = json!({"cwd": cwd.to_string_lossy(), "mcpServers": mcp_servers});
+        if let Some(sp) = system_prompt {
+            params["systemPrompt"] = json!({"mode": "append", "content": [{"type": "text", "text": sp}]});
+        }
         let v = self
-            .request(
-                methods::SESSION_NEW,
-                json!({"cwd": cwd.to_string_lossy(), "mcpServers": []}),
-                Some(self.inner.limits.request_timeout),
-            )
+            .request(methods::SESSION_NEW, params, Some(self.inner.limits.request_timeout))
             .await?;
         Self::decode(v)
     }

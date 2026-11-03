@@ -249,3 +249,40 @@ describe("Overview and states", () => {
     await waitFor(() => expect(calls.startLocalTask?.[0]).toEqual(["claude", "/Users/alex/Projects/site", "hello"]));
   });
 });
+
+describe("Activity chat", () => {
+  it("renders markdown safely, groups tool steps, shows site customization", async () => {
+    snapshot.tasks = [{
+      id: "t9", source: "remote", connectionId: "conn_1", serviceName: "Acme Notes", serviceDomain: "acme.example", providerId: "claude",
+      workspace: "/Users/alex/Projects/site", state: "completed", prompt: "Summarize", instructions: "You are the Acme assistant.", tools: ["acme (https://acme.example/mcp)"],
+      transcript: [
+        { type: "user", text: "Summarize" },
+        { type: "tool", toolCallId: "a", title: "Read README.md", kind: "read", status: "completed" },
+        { type: "tool", toolCallId: "b", title: "acme: lookup_note", kind: "fetch", status: "completed" },
+        { type: "agent", text: "## Summary\nThe app uses **Rust** and `tokio`.\n- one\n- two\n```rust\nfn main() {}\n```\n<img src=x onerror=alert(1)>" },
+      ],
+      createdAt: new Date().toISOString(), finishedAt: null, stopReason: "end_turn", error: null,
+    }];
+    await go(/^Activity/);
+    expect(await screen.findByText("2 steps")).toBeTruthy();
+    expect(screen.getByText("Read README.md")).toBeTruthy();
+    expect(screen.getByText("Rust").tagName).toBe("STRONG");
+    expect(screen.getByText("tokio").tagName).toBe("CODE");
+    expect(screen.getByText("fn main() {}").tagName).toBe("PRE");
+    // Raw HTML from the agent stays text.
+    expect(document.querySelector("img")).toBeNull();
+    expect(screen.getByText(/<img src=x/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Customized by Acme Notes/ }));
+    expect(screen.getByText("You are the Acme assistant.")).toBeTruthy();
+    expect(screen.getByText("acme (https://acme.example/mcp)")).toBeTruthy();
+  });
+
+  it("consent sheet mentions website tools when requested", async () => {
+    snapshot.pairingRequests = [{
+      pairingId: "pair_t", service: { id: "svc_a", displayName: "Acme Notes", origin: "https://acme.example", domain: "acme.example", verified: true, verification: "operator" },
+      externalUserId: "u", scopes: ["task.interactive", "agent.tools"], expiresAt: new Date(Date.now() + 600e3).toISOString(), receivedAt: new Date().toISOString(),
+    }];
+    render(<App />);
+    expect(await screen.findByText(/Give the agent its own tools \(MCP servers on acme.example\)/)).toBeTruthy();
+  });
+});

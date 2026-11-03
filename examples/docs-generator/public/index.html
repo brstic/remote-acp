@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>Docs Generator (Example)</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <p class="banner" role="note">
+      <strong>EXAMPLE</strong> · Docs Generator shows the Remote ACP Bridge permission flow. Sign-in is fake and data lives in server memory —
+      local development only.
+    </p>
+
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">&#x270E;</span>
+        <span>Docs Generator</span>
+        <span class="badge">EXAMPLE</span>
+      </div>
+      <div class="userbox" id="userbox" hidden>
+        <span class="avatar" id="avatar" aria-hidden="true"></span>
+        <span id="username"></span>
+        <button class="btn btn-ghost btn-sm" id="logout" type="button">Sign out</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="card signin" id="signin" hidden>
+        <h1>Sign in <span class="muted">(example only)</span></h1>
+        <p class="muted">No password. The name only scopes your desktop connection and jobs on this example server.</p>
+        <form id="login-form" class="row">
+          <label class="sr-only" for="login-name">Username</label>
+          <input id="login-name" placeholder="e.g. alice" autocomplete="off" maxlength="24" />
+          <button class="btn btn-primary" type="submit">Continue</button>
+        </form>
+        <p class="error" id="login-error" role="alert" hidden></p>
+      </section>
+
+      <div class="layout" id="app" hidden>
+        <aside class="sidebar">
+          <section class="card" aria-labelledby="conn-title">
+            <div class="card-head">
+              <h2 id="conn-title">Desktop agent</h2>
+              <button class="btn btn-ghost btn-sm" id="conn-refresh" type="button">Refresh</button>
+            </div>
+            <div id="conn-body" aria-live="polite"></div>
+          </section>
+
+          <section class="card explainer" aria-labelledby="perm-title">
+            <h2 id="perm-title">Who approves file writes?</h2>
+            <p><strong>Only you, on your computer.</strong> When the agent wants to write a file, Remote ACP Bridge asks you in the desktop app.</p>
+            <p class="muted small">
+              This website is told that a request is waiting and what you decided — nothing more. There is no way for a website to approve, deny or skip
+              the prompt on your behalf.
+            </p>
+          </section>
+
+          <section class="card" aria-labelledby="hist-title">
+            <h2 id="hist-title">This session</h2>
+            <ol class="history" id="history"></ol>
+            <p class="muted small" id="history-empty">No documents generated yet.</p>
+          </section>
+        </aside>
+
+        <div class="main-col">
+          <section class="card" aria-labelledby="gen-title">
+            <h2 id="gen-title">Generate a document for my project</h2>
+            <form id="gen-form">
+              <fieldset class="types" id="doc-types">
+                <legend class="sr-only">Document</legend>
+              </fieldset>
+              <label class="field-label" for="notes">Notes for the agent <span class="muted">(optional)</span></label>
+              <textarea id="notes" rows="3" maxlength="2000" placeholder="e.g. Audience is first-time contributors; mention that we use pnpm, not npm."></textarea>
+              <div class="gen-actions">
+                <button class="btn btn-primary" id="generate" type="submit" disabled>Generate on my computer</button>
+                <span class="muted small">The file is written into the project folder you chose in Remote ACP Bridge — after you approve it there. Connect with <em>Can edit</em> access.</span>
+              </div>
+            </form>
+          </section>
+
+          <section class="card job" id="job" aria-labelledby="job-title" hidden>
+            <div class="card-head">
+              <h2 id="job-title"></h2>
+              <div class="row">
+                <span class="status" id="job-status"></span>
+                <button class="btn btn-ghost btn-sm" id="cancel" type="button" hidden>Cancel</button>
+              </div>
+            </div>
+
+            <ol class="steps" id="steps">
+              <li data-step="sent"><span class="step-dot" aria-hidden="true"></span><span class="step-label">Sent to your computer</span></li>
+              <li data-step="approve"><span class="step-dot" aria-hidden="true"></span><span class="step-label">Task approved in Remote ACP Bridge</span></li>
+              <li data-step="work"><span class="step-dot" aria-hidden="true"></span><span class="step-label">Agent prepares the document</span></li>
+              <li data-step="permission"><span class="step-dot" aria-hidden="true"></span><span class="step-label">You decide whether the file may be written</span></li>
+              <li data-step="done"><span class="step-dot" aria-hidden="true"></span><span class="step-label">Result</span></li>
+            </ol>
+
+            <div class="callout callout-wait" id="perm-wait" role="status" hidden>
+              <div class="callout-icon" aria-hidden="true">&#x1F512;</div>
+              <div>
+                <strong>Waiting for your approval in Remote ACP Bridge</strong>
+                <p id="perm-wait-title" class="perm-title"></p>
+                <p class="small">Switch to the Remote ACP Bridge app on your computer and choose <em>Allow</em> or <em>Deny</em>. This website cannot approve it for you.</p>
+              </div>
+            </div>
+            <div class="callout" id="perm-outcome" role="status" hidden></div>
+            <div class="callout callout-err" id="job-error" role="alert" hidden></div>
+            <div class="callout callout-ok" id="job-done" role="status" hidden></div>
+
+            <h3>Agent messages</h3>
+            <pre class="agent-text" id="agent-text" aria-live="polite"></pre>
+            <h3>Tool calls</h3>
+            <ul class="tools" id="tools"></ul>
+            <p class="muted small" id="tools-empty">None yet.</p>
+
+            <details class="prompt">
+              <summary>Prompt sent to your agent</summary>
+              <pre id="prompt-text"></pre>
+            </details>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <footer class="foot muted small">Example app. Tasks and permission prompts are answered only in the Remote ACP Bridge desktop app.</footer>
+  </body>
+</html>

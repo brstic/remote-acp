@@ -1,0 +1,25 @@
+{
+  "name": "@remote-acp/example-docs-generator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "EXAMPLE: generates README / CONTRIBUTING / CHANGELOG files in the user's project via their desktop agent; demonstrates the local permission flow and error handling.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/main.js",
+    "dev": "pnpm --filter @remote-acp/example-docs-generator... build && REMOTE_ACP_SERVICE_SECRET=${REMOTE_ACP_SERVICE_SECRET:-dev-only-docs-generator-secret-0123456789} node dist/main.js",
+    "relay": "cargo run --manifest-path ../../Cargo.toml -p remote-acp-relay -- --config relay.dev.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@remote-acp/browser-helper": "workspace:*",
+    "@remote-acp/web-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "typescript": "5.6.3",
+    "vitest": "2.1.8"
+  }
+}

@@ -23,6 +23,8 @@ Remote ACP Bridge is a desktop app plus a small relay and a web SDK. A website c
 watches the agent work live. You approve what it may do. Nothing runs on your machine without your
 consent, and no AI credentials ever leave it.
 
+<p align="center"><img src="docs/assets/activity-chat.png" alt="Activity: a website's task running on Claude Code with plan, tool steps, a permission and a formatted answer" width="100%" /><br/><sub><b>Activity</b>: a website's task running on the user's Claude Code, with the site's own instructions and tools, the plan, tool steps, a local permission and a formatted answer.</sub></p>
+
 <table>
 <tr>
 <td width="50%"><img src="docs/assets/providers.png" alt="AI Providers: Codex and Claude Code signed in via their official ACP adapters" /><br/><sub><b>AI Providers</b>: official ACP adapters, official sign-in, verified versions.</sub></td>
@@ -105,6 +107,13 @@ const task = await bridge.startTask({
   idempotencyKey: crypto.randomUUID(),
 });
 
+// Optional: your own system instructions and your own tools (MCP servers on your domain)
+await bridge.startTask({
+  connectionId, externalUserId: user.id, prompt: "What changed in today's release?",
+  instructions: "You are the Acme Notes assistant. Cite file:line. Never modify files.",
+  tools: [{ name: "acme", url: "https://app.acme.com/mcp", headers: [{ name: "Authorization", value: `Bearer ${token}` }] }],
+});
+
 // 3. Stream progress (auto-resumes on network drops)
 for await (const ev of bridge.streamEvents(task.taskId)) {
   if (ev.kind === "task.event" && ev.payload.type === "text_delta") res.write(ev.payload.text);
@@ -128,6 +137,7 @@ for await (const ev of bridge.streamEvents(task.taskId)) {
 |---|---|
 | **Agents** | Codex (`@agentclientprotocol/codex-acp` 2.5.0) and Claude Code (`@agentclientprotocol/claude-agent-acp` 0.100.0), both via their official ACP adapters with official sign-in. Any other ACP agent can be added (hash-pinned). Plus a built-in Test agent. |
 | **Consent** | Per-site connection with project folder, access level (*Read only* / *Can edit*) and expiry. Per-task approval. Local permission prompts (*Deny / Allow once / Allow for this task*). |
+| **Customization** | Websites can send their own **system instructions** (appended to the agent's system prompt) and their own **tools** as MCP servers on their verified domain (requires the user's `agent.tools` consent). This works with both Codex and Claude Code. |
 | **Control** | Pause the whole bridge, pause or disconnect one site, disconnect all, stop any task. Closing the window keeps it running in the background. |
 | **Desktop UI** | Overview, AI Providers, Connected Websites, live Activity (with local test prompts), Settings, Diagnostics with an audit log, light and dark themes, notifications, menu bar icon, `remoteacp://` deep links. |
 | **Relay** | Authenticated services, single-use pairing tickets, tenant and user isolation, idempotent at-most-once task dispatch, SSE with `Last-Event-ID` resume, rate limits, revocation, domain verification. |
@@ -140,6 +150,7 @@ for await (const ev of bridge.streamEvents(task.taskId)) {
 | A website pretends to be another brand | Identity comes from the relay's registry, never from the link. Unverified sites get a red warning. |
 | A prompt tries to reach `~/.ssh`, `/etc`, other folders | Agents run in restricted modes (`read-only` / `default`). An **output firewall** checks every tool call and permission request for paths outside the project folder: it denies the request or stops the task, and nothing more is sent. |
 | The agent leaks credentials in its answer | Outgoing text is scanned for private keys and common token formats. If found, the task is stopped. |
+| A website aims the agent at local or LAN services through "tools" | Tool servers must be on the website's own verified domain (https). They need explicit `agent.tools` consent, and they're shown to the user on the task. |
 | The website approves its own permission prompt | There is no API for that. Permissions are answered only in the desktop app. |
 | Replay, duplicates or network loss | Single-use tickets, per-task sequence numbers, idempotency keys, at-most-once dispatch, resend-on-reconnect. |
 | Cross-tenant access | Every object is bound to the service and to the external user the desktop consented to. Anything else gets a 404. |

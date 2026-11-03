@@ -210,6 +210,51 @@ pub struct TaskStart {
     pub mode: TaskMode,
     /// Service id as authenticated by the relay (never taken from the browser).
     pub service_id: String,
+    /// Website-provided system instructions, appended to the agent's own
+    /// system prompt for the session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<String>,
+    /// Website-provided tools: MCP servers (Streamable HTTP) hosted on the
+    /// website's own domain. Requires the `agent.tools` scope.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tools: Vec<McpServer>,
+}
+
+pub const MAX_INSTRUCTIONS_BYTES: usize = 32 * 1024;
+pub const MAX_TOOL_SERVERS: usize = 8;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HttpHeader {
+    pub name: String,
+    pub value: String,
+}
+
+/// An MCP server the website offers to the agent.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpServer {
+    pub name: String,
+    pub url: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub headers: Vec<HttpHeader>,
+}
+
+impl McpServer {
+    /// Structural validation (the desktop additionally checks the host
+    /// against the service's verified origin).
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.name.is_empty() || self.name.len() > 64 || !self.name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-') {
+            return Err("tool server name must be 1-64 chars of [A-Za-z0-9_-]");
+        }
+        if self.url.len() > 2048 || !(self.url.starts_with("https://") || self.url.starts_with("http://localhost") || self.url.starts_with("http://127.0.0.1")) {
+            return Err("tool server url must be https");
+        }
+        if self.headers.len() > 8 || self.headers.iter().any(|h| h.name.is_empty() || h.name.len() > 128 || h.value.len() > 4096 || h.name.bytes().any(|b| !(b.is_ascii_alphanumeric() || b == b'-'))) {
+            return Err("invalid tool server headers");
+        }
+        Ok(())
+    }
 }
 
 impl TaskStart {
@@ -488,6 +533,18 @@ impl Envelope {
                 if !valid_id(&ts.service_id) {
                     return Err(ValidationError::InvalidField("serviceId"));
                 }
+                if ts.instructions.as_ref().map(|i| i.len() > MAX_INSTRUCTIONS_BYTES).unwrap_or(false) {
+                    return Err(ValidationError::InvalidField("instructions"));
+                }
+                if ts.tools.len() > MAX_TOOL_SERVERS || ts.tools.iter().any(|t| t.validate().is_err()) {
+                    return Err(ValidationError::InvalidField("tools"));
+                }
+                let mut names: Vec<&str> = ts.tools.iter().map(|t| t.name.as_str()).collect();
+                names.sort();
+                names.dedup();
+                if names.len() != ts.tools.len() {
+                    return Err(ValidationError::InvalidField("tools"));
+                }
             }
             Body::TaskEvent(TaskEvent::TextDelta { text } | TaskEvent::ThoughtDelta { text }) => {
                 if text.len() > MAX_TEXT_DELTA_BYTES {
@@ -507,7 +564,9 @@ impl Envelope {
 /// Grant scopes understood in protocol version 1.
 pub mod scopes {
     pub const TASK_INTERACTIVE: &str = "task.interactive";
-    pub const ALL: &[&str] = &[TASK_INTERACTIVE];
+    /// Website may attach its own tools (MCP servers on its domain).
+    pub const AGENT_TOOLS: &str = "agent.tools";
+    pub const ALL: &[&str] = &[TASK_INTERACTIVE, AGENT_TOOLS];
 
     pub fn is_known(s: &str) -> bool {
         ALL.contains(&s)
@@ -527,6 +586,8 @@ mod tests {
                 }],
                 mode: TaskMode::Interactive,
                 service_id: "svc_demo".into(),
+                instructions: None,
+                tools: vec![],
             }),
             "conn_1",
             "task_1",
@@ -605,6 +666,33 @@ mod tests {
         assert!(Envelope::parse(&e.to_json(), Sender::Relay).is_err());
         let mut e = task_start();
         e.task_id = None;
+        assert!(Envelope::parse(&e.to_json(), Sender::Relay).is_err());
+    }
+
+    #[test]
+    fn instructions_and_tools_validation() {
+        let mut e = task_start();
+        if let Body::TaskStart(ts) = &mut e.body {
+            ts.instructions = Some("You are the Acme assistant.".into());
+            ts.tools = vec![McpServer { name: "acme".into(), url: "https://acme.example/mcp".into(), headers: vec![HttpHeader { name: "Authorization".into(), value: "Bearer x".into() }] }];
+        }
+        let back = Envelope::parse(&e.to_json(), Sender::Relay).unwrap();
+        assert_eq!(back, e);
+        for bad in [
+            McpServer { name: "x".into(), url: "http://evil.example/mcp".into(), headers: vec![] },
+            McpServer { name: "bad name".into(), url: "https://a.example".into(), headers: vec![] },
+            McpServer { name: "x".into(), url: "file:///etc/passwd".into(), headers: vec![] },
+        ] {
+            let mut e = task_start();
+            if let Body::TaskStart(ts) = &mut e.body {
+                ts.tools = vec![bad];
+            }
+            assert!(Envelope::parse(&e.to_json(), Sender::Relay).is_err());
+        }
+        let mut e = task_start();
+        if let Body::TaskStart(ts) = &mut e.body {
+            ts.instructions = Some("x".repeat(MAX_INSTRUCTIONS_BYTES + 1));
+        }
         assert!(Envelope::parse(&e.to_json(), Sender::Relay).is_err());
     }
 
