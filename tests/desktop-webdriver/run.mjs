@@ -79,7 +79,8 @@ async function waitText(text, timeout = 30000) {
   throw new Error(`text not shown: ${text}`);
 }
 async function attr(xpath, name) {
-  return wd("GET", `/session/${sid}/element/${await find(xpath)}/attribute/${name}`);
+  // DOM property (live state), not the HTML attribute.
+  return wd("GET", `/session/${sid}/element/${await find(xpath)}/property/${name}`);
 }
 
 let failed = false;
