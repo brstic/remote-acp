@@ -7,6 +7,7 @@
 **Use the AI coding agent on your own computer from websites you trust,<br/>while sign-in, files, permissions and execution stay on your machine.**
 
 [![CI](https://github.com/brstic/remote-acp/actions/workflows/ci.yml/badge.svg)](https://github.com/brstic/remote-acp/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/brstic/remote-acp?include_prereleases&label=release)](https://github.com/brstic/remote-acp/releases/latest)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 ![Platforms](https://img.shields.io/badge/desktop-macOS%20·%20Windows%20·%20Linux-informational)
 ![Agent Client Protocol](https://img.shields.io/badge/protocol-ACP%20v1-8A2BE2)
@@ -68,6 +69,8 @@ flowchart LR
 The desktop app only makes **outbound** connections. No ports are opened, and no router setup is needed.
 
 ## Quick start
+
+**Just want to try the app?** Download it from the [latest release](https://github.com/brstic/remote-acp/releases/latest): `.dmg` (macOS), `.msi`/`.exe` (Windows), `.AppImage`/`.deb`/`.rpm` (Linux), plus relay binaries. Preview builds are unsigned (see the release notes). To build from source:
 
 > **Prerequisites:** Rust (stable), Node.js 22+, pnpm 9. On macOS you also need the Xcode Command Line Tools. On Linux you need the WebKitGTK 4.1 dev packages (see `.github/workflows/ci.yml`).
 
