@@ -60,7 +60,7 @@ _Last updated: 2026-11-02_
 - GUI E2E is a scripted manual-run procedure (macOS only), not part of CI.
 - Two installed copies of the app (e.g. debug + release bundles) both register `remoteacp://`; macOS may hand the link to the non-running copy, whose single-instance hand-off drops the URL. Keep one installed copy (see troubleshooting).
 - Signing/notarization: wired in `release.yml` (activates with `APPLE_*` secrets); not performed — no Developer ID on this machine. No auto-update.
-- Windows/Linux: all Rust and TS test suites pass in CI; the desktop app itself was not launched on a real Windows or Linux machine.
+- Windows/Linux: all Rust and TS test suites pass in CI, and CI launches the desktop app (`scripts/desktop-smoke.sh`; Linux under Xvfb) and verifies it registers and connects to a relay on all three OSes. Interactive UI use (pairing consent, approvals) was exercised on macOS only.
 - No hosted relay is running yet: a deployable kit exists (`deploy/relay`: Docker + Caddy automatic TLS); it needs a server and a domain.
 - No E2EE (TLS + no persistence on relay only).
 - Next.js demo from the plan replaced by a framework-free Node demo.
