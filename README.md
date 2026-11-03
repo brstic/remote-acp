@@ -224,8 +224,8 @@ If you are an AI agent working in this repository, start here:
 ## Status
 
 Working on macOS, tested end to end with real Codex and Claude Code. The full Rust and TypeScript test
-suites pass in CI on macOS, Windows and Linux, and CI launches the desktop app on all three and
-checks that it registers and connects to a relay. Not done yet: code signing and notarization, auto-update, end-to-end encryption, a hosted
+suites pass in CI on macOS, Windows and Linux, CI launches the desktop app on all three, and
+clicks through the real UI with WebDriver on Windows and Linux. Not done yet: code signing and notarization, auto-update, end-to-end encryption, a hosted
 public relay. See [PROGRESS.md](PROGRESS.md).
 
 ## License
