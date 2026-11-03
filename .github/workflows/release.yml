@@ -75,8 +75,11 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+      # Only our build outputs (not the Docker build record artifact).
       - uses: actions/download-artifact@v4
-        with: { path: dist, merge-multiple: true }
+        with: { path: dist, merge-multiple: true, pattern: "desktop-*" }
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true, pattern: "remote-acp-relay-*" }
       - name: Checksums
         run: cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
       - name: Create GitHub release
@@ -90,6 +93,8 @@ jobs:
 
   relay-image:
     runs-on: ubuntu-22.04
+    env:
+      DOCKER_BUILD_RECORD_UPLOAD: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3
